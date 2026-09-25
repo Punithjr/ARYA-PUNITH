@@ -1,0 +1,237 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #fffbf2;
+  --ink: #2b2b2b;
+  --accent: #f59e0b;
+  --ink-faint: #e5e7eb;
+  --secondary: #10b981;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: 'Inter', 'Noto Sans Kannada', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Design Variation Typography */
+.font-gaegu {
+  font-family: 'Gaegu', cursive;
+}
+
+.font-mono-code {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.font-kannada {
+  font-family: 'Noto Sans Kannada', 'Inter', sans-serif;
+}
+
+/* Warm Playful Brutalist UI Tokens */
+.card-brutal {
+  background: #ffffff;
+  border: 2.5px solid var(--ink);
+  box-shadow: 6px 6px 0px var(--ink);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card-brutal:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 8px 8px 0px var(--ink);
+}
+
+.card-brutal-static {
+  background: #ffffff;
+  border: 2.5px solid var(--ink);
+  box-shadow: 6px 6px 0px var(--ink);
+}
+
+.card-brutal-sm {
+  background: #ffffff;
+  border: 2px solid var(--ink);
+  box-shadow: 4px 4px 0px var(--ink);
+}
+
+.card-brutal-emerald {
+  background: #ffffff;
+  border: 2.5px solid var(--ink);
+  box-shadow: 6px 6px 0px var(--secondary);
+}
+
+.card-brutal-accent {
+  background: #ffffff;
+  border: 2.5px solid var(--ink);
+  box-shadow: 6px 6px 0px var(--accent);
+}
+
+.ink-pill {
+  background: var(--ink);
+  color: var(--bg);
+  border: 2px solid var(--ink);
+  font-family: 'JetBrains Mono', monospace;
+  padding: 0.5rem 1.25rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ink-pill:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0px var(--accent);
+}
+
+.label-ink {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1rem;
+  background: var(--ink);
+  color: var(--bg);
+  padding: 0.2rem 0.6rem;
+  width: fit-content;
+  font-weight: 700;
+  display: inline-block;
+  border-radius: 4px;
+}
+
+.label-accent {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1rem;
+  background: var(--accent);
+  color: var(--ink);
+  padding: 0.2rem 0.6rem;
+  width: fit-content;
+  font-weight: 800;
+  display: inline-block;
+  border-radius: 4px;
+}
+
+.label-emerald {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1rem;
+  background: var(--secondary);
+  color: #ffffff;
+  padding: 0.2rem 0.6rem;
+  width: fit-content;
+  font-weight: 800;
+  display: inline-block;
+  border-radius: 4px;
+}
+
+.notice-sticky {
+  background: #ffffff;
+  border: 2.5px dashed var(--ink);
+  padding: 1.5rem;
+  transform: rotate(1.5deg);
+  box-shadow: 4px 4px 0px rgba(43, 43, 43, 0.12);
+  border-radius: 12px;
+}
+
+.squiggle-bg {
+  position: absolute;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(var(--accent) 15%, transparent 16%);
+  background-size: 16px 16px;
+  z-index: 0;
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm 12mm 15mm;
+  }
+
+  /* Hide all UI navigation and buttons during print */
+  nav,
+  header,
+  #stats-overview-bar,
+  #batch-action-bar,
+  #app-toast-alert,
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: 12pt !important;
+    line-height: 1.5 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #root {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  /* Make all official letter & memorandum print containers strictly fit A4 page with 12pt font */
+  #general-letter-paper,
+  #official-letter-paper,
+  #memorandum-order-paper,
+  #printable-letter-document,
+  #printable-audit-report,
+  #form-28-print-container,
+  #office-order-print-container,
+  .memorandum-doc,
+  .official-letter-paper,
+  .printable-document,
+  .fit-paper-a4 {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    background: #ffffff !important;
+    font-size: 12pt !important;
+    line-height: 1.5 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Table styling for print */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    font-size: 10pt !important;
+  }
+
+  tr, td, th {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  textarea, input {
+    border: none !important;
+    outline: none !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+}
+

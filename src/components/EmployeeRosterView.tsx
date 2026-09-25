@@ -1,0 +1,1243 @@
+import React, { useState, useMemo } from 'react';
+import * as XLSX from 'xlsx';
+import { 
+  Users, 
+  UserPlus, 
+  UploadCloud, 
+  FileSpreadsheet,
+  Download, 
+  Search, 
+  Filter, 
+  Building2, 
+  Mail, 
+  Phone, 
+  MapPin, 
+  Calendar, 
+  Edit3, 
+  Trash2, 
+  CheckCircle2, 
+  Clock, 
+  FileText, 
+  ChevronRight,
+  Sparkles,
+  ShieldCheck,
+  FolderGit2,
+  X,
+  Award,
+  TrendingUp,
+  Coins
+} from 'lucide-react';
+import { Employee, DepartmentSection, EmployeeStatus, EmployeeRole, EducationLetter, MasterDocketFile } from '../types';
+
+interface EmployeeRosterViewProps {
+  employees: Employee[];
+  letters: EducationLetter[];
+  files: MasterDocketFile[];
+  onAddEmployee: () => void;
+  onEditEmployee: (employee: Employee) => void;
+  onUploadEmployees: () => void;
+  onDeleteEmployee: (id: string) => Promise<void>;
+  onBatchDeleteEmployees?: (ids: string[]) => Promise<void>;
+  onClearAllEmployees?: () => Promise<void>;
+  onSelectLetter?: (letter: EducationLetter) => void;
+  onSeedEmployees?: () => Promise<void>;
+  onOpenServiceSanctions?: (employee?: Employee) => void;
+  onDraftLetterForEmployee?: (employee: Employee) => void;
+  onOpenPrapathra28?: () => void;
+  onGoBackHome?: () => void;
+}
+
+const SECTIONS: (DepartmentSection | 'all')[] = [
+  'all',
+  'Academic Wing',
+  'Administration & Services',
+  'Accounts & Grants',
+  'Examination Board',
+  'Inspection & Quality',
+  'Legal & Grievances',
+];
+
+const STATUSES: (EmployeeStatus | 'all')[] = [
+  'all',
+  'Active',
+  'On Leave',
+  'Transferred',
+  'Deputation',
+  'Retired',
+];
+
+export const EmployeeRosterView: React.FC<EmployeeRosterViewProps> = ({
+  employees = [],
+  letters = [],
+  files = [],
+  onAddEmployee,
+  onEditEmployee,
+  onUploadEmployees,
+  onDeleteEmployee,
+  onBatchDeleteEmployees,
+  onClearAllEmployees,
+  onSelectLetter,
+  onSeedEmployees,
+  onOpenServiceSanctions,
+  onDraftLetterForEmployee,
+  onOpenPrapathra28,
+  onGoBackHome,
+}) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedSection, setSelectedSection] = useState<DepartmentSection | 'all'>('all');
+  const [selectedStatus, setSelectedStatus] = useState<EmployeeStatus | 'all'>('all');
+  const [selectedRole, setSelectedRole] = useState<string>('all');
+  const [selectedEmployeeForDossier, setSelectedEmployeeForDossier] = useState<Employee | null>(null);
+
+  // Multi-selection for batch deletion
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const [isClearingAll, setIsClearingAll] = useState(false);
+
+  // Filtered employees
+  const filteredEmployees = useMemo(() => {
+    return employees.filter((emp) => {
+      // Search
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase().trim();
+        const matchesSearch =
+          emp.fullName.toLowerCase().includes(q) ||
+          emp.employeeCode.toLowerCase().includes(q) ||
+          (emp.kgidNumber && emp.kgidNumber.toLowerCase().includes(q)) ||
+          (emp.placeOfWork && emp.placeOfWork.toLowerCase().includes(q)) ||
+          (emp.ddoCode && emp.ddoCode.toLowerCase().includes(q)) ||
+          (emp.parentName && emp.parentName.toLowerCase().includes(q)) ||
+          (emp.epicNo && emp.epicNo.toLowerCase().includes(q)) ||
+          (emp.hometown && emp.hometown.toLowerCase().includes(q)) ||
+          emp.designation.toLowerCase().includes(q) ||
+          emp.section.toLowerCase().includes(q) ||
+          emp.officeLocation.toLowerCase().includes(q) ||
+          emp.email.toLowerCase().includes(q) ||
+          emp.phone.toLowerCase().includes(q) ||
+          (emp.qualifications && emp.qualifications.toLowerCase().includes(q));
+
+        if (!matchesSearch) return false;
+      }
+
+      // Section
+      if (selectedSection !== 'all' && emp.section !== selectedSection) {
+        return false;
+      }
+
+      // Status
+      if (selectedStatus !== 'all' && emp.status !== selectedStatus) {
+        return false;
+      }
+
+      // Role
+      if (selectedRole !== 'all' && emp.role !== selectedRole) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [employees, searchTerm, selectedSection, selectedStatus, selectedRole]);
+
+  // Quick statistics
+  const totalCount = employees.length;
+  const activeCount = employees.filter((e) => e.status === 'Active').length;
+  const leaveCount = employees.filter((e) => e.status === 'On Leave' || e.status === 'Deputation').length;
+  const permanentCount = employees.filter((e) => e.employmentType === 'Permanent').length;
+
+  // Export current filtered list to Microsoft Excel (.xlsx)
+  const handleExportExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const data = filteredEmployees.map((e) => ({
+      'Employee Code': e.employeeCode,
+      'KGID Number': e.kgidNumber || '',
+      'Full Name': e.fullName,
+      'Designation': e.designation,
+      'Place of Work': e.placeOfWork || '',
+      'Basic Pay (₹)': e.basicPay || 0,
+      'Pay Scale': e.payScale || '',
+      'Gender': e.gender || '',
+      'DOB': e.dob || '',
+      'Age': e.age || '',
+      'DDO Code': e.ddoCode || '',
+      'Parent Name': e.parentName || '',
+      'EPIC No': e.epicNo || '',
+      'Hometown': e.hometown || '',
+      'Section': e.section,
+      'Office Location': e.officeLocation,
+      'Email': e.email,
+      'Phone': e.phone,
+      'Employment Type': e.employmentType,
+      'Status': e.status,
+      'Role': e.role,
+      'Joining Date': e.joiningDate,
+      'Qualifications': e.qualifications || '',
+      'Notes': e.notes || '',
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = [
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 26 },
+      { wch: 32 },
+      { wch: 30 },
+      { wch: 14 },
+      { wch: 20 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 8 },
+      { wch: 14 },
+      { wch: 22 },
+      { wch: 14 },
+      { wch: 16 },
+      { wch: 25 },
+      { wch: 32 },
+      { wch: 28 },
+      { wch: 18 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 20 },
+      { wch: 14 },
+      { wch: 28 },
+      { wch: 35 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, 'Education_Staff_Establishment');
+    XLSX.writeFile(wb, `BEO_Bhadravathi_Employees_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  // Export current list to CSV
+  const handleExportCSV = () => {
+    const headers = [
+      'Employee Code',
+      'KGID Number',
+      'Full Name',
+      'Designation',
+      'Place of Work',
+      'Basic Pay',
+      'Pay Scale',
+      'Gender',
+      'DOB',
+      'Age',
+      'DDO Code',
+      'Parent Name',
+      'EPIC No',
+      'Hometown',
+      'Section',
+      'Office Location',
+      'Email',
+      'Phone',
+      'Employment Type',
+      'Status',
+      'Role',
+      'Joining Date',
+      'Qualifications',
+      'Notes'
+    ];
+
+    const rows = filteredEmployees.map((e) => [
+      `"${e.employeeCode}"`,
+      `"${e.kgidNumber || ''}"`,
+      `"${e.fullName}"`,
+      `"${e.designation}"`,
+      `"${e.placeOfWork || ''}"`,
+      `"${e.basicPay || ''}"`,
+      `"${e.payScale || ''}"`,
+      `"${e.gender || ''}"`,
+      `"${e.dob || ''}"`,
+      `"${e.age || ''}"`,
+      `"${e.ddoCode || ''}"`,
+      `"${e.parentName || ''}"`,
+      `"${e.epicNo || ''}"`,
+      `"${e.hometown || ''}"`,
+      `"${e.section}"`,
+      `"${e.officeLocation}"`,
+      `"${e.email}"`,
+      `"${e.phone}"`,
+      `"${e.employmentType}"`,
+      `"${e.status}"`,
+      `"${e.role}"`,
+      `"${e.joiningDate}"`,
+      `"${(e.qualifications || '').replace(/"/g, '""')}"`,
+      `"${(e.notes || '').replace(/"/g, '""')}"`
+    ]);
+
+    const csvString = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `beo_bhadravathi_employees_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Letters and Files handled by an employee
+  const getEmployeeAssignments = (emp: Employee) => {
+    const assignedLetters = letters.filter(
+      (l) =>
+        l.assignedOfficer.toLowerCase().includes(emp.fullName.toLowerCase()) ||
+        l.assignedOfficer.toLowerCase().includes(emp.employeeCode.toLowerCase())
+    );
+    const custodianFiles = files.filter(
+      (f) =>
+        f.currentCustodian.toLowerCase().includes(emp.fullName.toLowerCase()) ||
+        f.currentCustodian.toLowerCase().includes(emp.designation.toLowerCase())
+    );
+    return { assignedLetters, custodianFiles };
+  };
+
+  const getStatusBadge = (status: EmployeeStatus) => {
+    switch (status) {
+      case 'Active':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            Active
+          </span>
+        );
+      case 'On Leave':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+            On Leave
+          </span>
+        );
+      case 'Transferred':
+      case 'Deputation':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+            {status}
+          </span>
+        );
+      case 'Retired':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-stone-100 text-stone-600 border border-stone-200">
+            Retired
+          </span>
+        );
+    }
+  };
+
+  const handleToggleSelectAll = () => {
+    if (selectedIds.size === filteredEmployees.length && filteredEmployees.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredEmployees.map(e => e.id)));
+    }
+  };
+
+  const handleToggleSelectOne = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedIds(next);
+  };
+
+  const handleExecuteBatchDelete = async () => {
+    if (selectedIds.size === 0 || !onBatchDeleteEmployees) return;
+    const confirmMsg = `ಖಚಿತಪಡಿಸಿ: ಆಯ್ಕೆಮಾಡಲಾದ ${selectedIds.size} ನೌಕರರ ದಾಖಲೆಗಳನ್ನು ಶಾಶ್ವತವಾಗಿ ತೆಗೆಯಬೇಕೆ?\nAre you sure you want to delete ${selectedIds.size} selected employee records?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsBatchDeleting(true);
+    try {
+      await onBatchDeleteEmployees(Array.from(selectedIds));
+      setSelectedIds(new Set());
+    } finally {
+      setIsBatchDeleting(false);
+    }
+  };
+
+  const handleExecuteClearAll = async () => {
+    if (!onClearAllEmployees) return;
+    const confirmMsg = `ಎಚ್ಚರಿಕೆ! ಎಲ್ಲಾ ${employees.length} ನೌಕರರ ದಾಖಲೆಗಳನ್ನು ಕಛೇರಿ ಪಟ್ಟಿಯಿಂದ ಸಂಪೂರ್ಣವಾಗಿ ತೆಗೆದುಹಾಕಬೇಕೆ? ಈ ಕ್ರಿಯೆಯನ್ನು ಹಿಂಪಡೆಯಲಾಗುವುದಿಲ್ಲ!\n(Are you sure you want to completely clear ALL ${employees.length} employee records?)`;
+    if (!window.confirm(confirmMsg)) return;
+    const doubleConfirm = window.prompt(`ದೃಢೀಕರಿಸಲು ದಯವಿಟ್ಟು "DELETE" ಎಂದು ಟೈಪ್ ಮಾಡಿ (Type "DELETE" to confirm):`);
+    if (doubleConfirm !== 'DELETE') return;
+
+    setIsClearingAll(true);
+    try {
+      await onClearAllEmployees();
+      setSelectedIds(new Set());
+    } finally {
+      setIsClearingAll(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Back to Home & Roster Header Bar */}
+      {onGoBackHome && (
+        <div className="bg-stone-900 text-stone-100 rounded-xl p-3 sm:p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 border border-stone-800">
+          <div className="flex items-center gap-3">
+            <button
+              id="btn-employee-back-to-home"
+              onClick={onGoBackHome}
+              className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-stone-950 font-black text-xs rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+              title="ಮುಖಪುಟಕ್ಕೆ ಹಿಂತಿರುಗಿ"
+            >
+              <span>&larr; ಮುಖಪುಟಕ್ಕೆ ಹಿಂತಿರುಗಿ (Home)</span>
+            </button>
+            <div>
+              <h2 className="text-sm font-bold text-amber-300">
+                ನೌಕರರ ಮಾಹಿತಿ ವಿವರ (Employee Information & Service Records)
+              </h2>
+              <p className="text-[11px] text-stone-400">
+                ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ - ನೌಕರರ ಸೇವಾ ದಾಖಲೆಗಳು, ವೇತನ ವಿವರ ಮತ್ತು ವಾರ್ಷಿಕ ವೇತನ ಬಡ್ತಿ ನಿರ್ವಹಣೆ
+              </p>
+            </div>
+          </div>
+
+          {onOpenPrapathra28 && (
+            <button
+              id="btn-employee-open-prapathra"
+              onClick={onOpenPrapathra28}
+              className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-amber-300 text-xs font-bold rounded-lg border border-stone-700 flex items-center gap-1.5 cursor-pointer"
+            >
+              <Award className="w-3.5 h-3.5 text-amber-400" />
+              <span>ಪ್ರಪತ್ರ-೨೮ ವೇತನ ಬಡ್ತಿಗೆ ಹೋಗಿ &rarr;</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Top Banner & Metric Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="card-brutal p-4 bg-white">
+          <div className="flex items-center justify-between">
+            <span className="label-ink">TOTAL ROSTER</span>
+            <div className="w-8 h-8 rounded-lg bg-[#fffbf2] border-2 border-[#2b2b2b] text-[#2b2b2b] flex items-center justify-center">
+              <Users className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-[#2b2b2b] mt-2 font-mono-code">
+            {totalCount}
+          </div>
+          <div className="text-xs text-[#2b2b2b]/70 mt-1 font-kannada">
+            ನೋಂದಾಯಿತ ಸಿಬ್ಬಂದಿ ವರ್ಗ
+          </div>
+        </div>
+
+        <div className="card-brutal p-4 bg-white">
+          <div className="flex items-center justify-between">
+            <span className="label-secondary">ACTIVE DUTY</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 border-2 border-[#2b2b2b] text-[#10b981] flex items-center justify-center">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-[#10b981] mt-2 font-mono-code">
+            {activeCount}
+          </div>
+          <div className="text-xs text-[#2b2b2b]/70 mt-1 font-kannada">
+            ಕರ್ತವ್ಯದಲ್ಲಿರುವ ಅಧಿಕಾರಿಗಳು
+          </div>
+        </div>
+
+        <div className="card-brutal p-4 bg-white">
+          <div className="flex items-center justify-between">
+            <span className="label-accent">LEAVE & DEP.</span>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 border-2 border-[#2b2b2b] text-[#f59e0b] flex items-center justify-center">
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-[#f59e0b] mt-2 font-mono-code">
+            {leaveCount}
+          </div>
+          <div className="text-xs text-[#2b2b2b]/70 mt-1 font-kannada">
+            ರಜೆ / ನಿಯೋಜನೆ ಮೇಲಿರುವವರು
+          </div>
+        </div>
+
+        <div className="card-brutal p-4 bg-white">
+          <div className="flex items-center justify-between">
+            <span className="label-ink">PERMANENT</span>
+            <div className="w-8 h-8 rounded-lg bg-[#fffbf2] border-2 border-[#2b2b2b] text-[#2b2b2b] flex items-center justify-center">
+              <ShieldCheck className="w-4 h-4 text-[#2b2b2b]" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-[#2b2b2b] mt-2 font-mono-code">
+            {permanentCount}
+          </div>
+          <div className="text-xs text-[#2b2b2b]/70 mt-1 font-kannada">
+            ಖಾಯಂ ವೃಂದದ ನೌಕರರು
+          </div>
+        </div>
+      </div>
+
+      {/* Main Container */}
+      <div className="card-brutal bg-white overflow-hidden">
+        {/* Action Header */}
+        <div className="p-4 sm:p-5 border-b-3 border-[#2b2b2b] bg-[#fffbf2] flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="font-gaegu text-3xl font-bold text-[#2b2b2b] tracking-tight">
+                Establishment & Staff Directory
+              </h2>
+              <span className="label-ink">
+                {filteredEmployees.length} Shown
+              </span>
+            </div>
+            <p className="text-xs text-[#2b2b2b]/80 mt-0.5 font-kannada">
+              ಕಛೇರಿಯ ಅಧಿಕಾರಿ/ಸಿಬ್ಬಂದಿಗಳ ಸೇವಾ ವಿವರಗಳು, ವೇತನ ಬಡ್ತಿ ಮತ್ತು ಕಡತಗಳ ನಿರ್ವಹಣೆ
+            </p>
+          </div>
+
+          {/* Action Buttons: Add, Upload Excel, Export Excel, Seed, Service Sanctions */}
+          <div className="flex flex-wrap items-center gap-2">
+            {onOpenServiceSanctions && (
+              <button
+                id="btn-roster-service-sanctions"
+                onClick={() => onOpenServiceSanctions()}
+                className="px-3 py-1.5 text-xs font-bold text-[#2b2b2b] bg-[#f59e0b] hover:bg-amber-400 border-2 border-[#2b2b2b] rounded-lg shadow-[2px_2px_0px_#2b2b2b] transition-all cursor-pointer flex items-center gap-1.5 font-kannada"
+                title="ಗಳಿಕೆ ರಜೆ, ಶಿಶುಪಾಲನ ರಜೆ, ಕಾಲಮಿತಿ / ಸ್ವಯಂಚಾಲಿತ / ಹೆಚ್ಚುವರಿ ವೇತನ ಬಡ್ತಿ ಕಡತ ಪ್ರಕ್ರಿಯೆ"
+              >
+                <Award className="w-3.5 h-3.5 text-[#2b2b2b]" />
+                <span>ರಜೆ / ವೇತನ ಬಡ್ತಿ ಕಡತ</span>
+              </button>
+            )}
+
+            {onOpenPrapathra28 && (
+              <button
+                id="btn-roster-prapathra28"
+                onClick={onOpenPrapathra28}
+                className="px-3 py-1.5 text-xs font-bold text-white bg-[#10b981] hover:bg-emerald-600 border-2 border-[#2b2b2b] rounded-lg shadow-[2px_2px_0px_#2b2b2b] transition-all cursor-pointer flex items-center gap-1.5 font-kannada"
+                title="ಕರ್ನಾಟಕ ನಾಗರೀಕ ಸೇವಾ ನಿಯಮಾವಳಿ ಪ್ರಪತ್ರ-೨೮ ರ ವಾರ್ಷಿಕ ವೇತನ ಬಡ್ತಿ ಪ್ರಮಾಣ ಪತ್ರ ರಚಿಸಿ"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-white" />
+                <span>ಪ್ರಪತ್ರ-೨೮ (Form 28)</span>
+              </button>
+            )}
+
+            {onSeedEmployees && (
+              <button
+                id="btn-seed-emp-data"
+                onClick={onSeedEmployees}
+                className="px-3 py-1.5 text-xs font-bold text-[#2b2b2b] bg-white hover:bg-[#fffbf2] border-2 border-[#2b2b2b] rounded-lg shadow-[2px_2px_0px_#2b2b2b] transition-all cursor-pointer flex items-center gap-1.5 font-kannada"
+                title="Seed standard Education Department cadre and officer records"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[#f59e0b]" />
+                <span>ಸಿಬ್ಬಂದಿ ಡೇಟಾ ರಚಿಸಿ</span>
+              </button>
+            )}
+
+            <button
+              id="btn-upload-emp-data"
+              onClick={onUploadEmployees}
+              className="px-3 py-1.5 text-xs font-bold text-[#2b2b2b] bg-white hover:bg-[#fffbf2] border-2 border-[#2b2b2b] rounded-lg shadow-[2px_2px_0px_#2b2b2b] transition-all cursor-pointer flex items-center gap-1.5 font-kannada"
+              title="Bulk upload employee roster from Microsoft Excel (.xlsx) or CSV"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-[#10b981]" />
+              <span>ಎಕ್ಸೆಲ್ ಅಪ್ಲೋಡ್</span>
+            </button>
+
+            <button
+              id="btn-export-emp-excel"
+              onClick={handleExportExcel}
+              className="px-2.5 py-1.5 text-xs font-bold text-[#2b2b2b] bg-white hover:bg-[#fffbf2] border-2 border-[#2b2b2b] rounded-lg shadow-[2px_2px_0px_#2b2b2b] transition-all cursor-pointer flex items-center gap-1.5 font-mono-code"
+              title="Export current filtered roster to Microsoft Excel (.xlsx)"
+            >
+              <Download className="w-3.5 h-3.5 text-[#10b981]" />
+              <span>.XLSX</span>
+            </button>
+
+            <button
+              id="btn-export-emp-csv"
+              onClick={handleExportCSV}
+              className="px-2.5 py-1.5 text-xs font-medium text-stone-700 bg-white hover:bg-stone-100 border border-stone-300 rounded-lg shadow-2xs transition-colors flex items-center gap-1"
+              title="Export displayed employees to CSV"
+            >
+              <span>.CSV</span>
+            </button>
+
+            {onClearAllEmployees && employees.length > 0 && (
+              <button
+                id="btn-clear-all-employees"
+                onClick={handleExecuteClearAll}
+                disabled={isClearingAll}
+                className="px-2.5 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border-2 border-[#2b2b2b] rounded-lg shadow-[2px_2px_0px_#2b2b2b] transition-all cursor-pointer flex items-center gap-1 font-kannada"
+                title="ಎಲ್ಲಾ ನೌಕರರ ದಾಖಲೆಗಳನ್ನು ತೆಗೆದುಹಾಕಿ (Clear entire roster)"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                <span>ತೆರವುಗೊಳಿಸಿ ({employees.length})</span>
+              </button>
+            )}
+
+            <button
+              id="btn-add-employee"
+              onClick={onAddEmployee}
+              className="px-3.5 py-1.5 text-xs font-bold text-white bg-[#2b2b2b] hover:bg-stone-800 border-2 border-[#2b2b2b] rounded-lg shadow-[2px_2px_0px_#f59e0b] transition-all cursor-pointer flex items-center gap-1.5 font-kannada"
+            >
+              <UserPlus className="w-3.5 h-3.5 text-[#f59e0b]" />
+              <span>ಹೊಸ ನೌಕರ (Add Employee)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Filter & Search Toolbar */}
+        <div className="p-4 border-b-2 border-[#2b2b2b] bg-white grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Search */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-[#2b2b2b] absolute left-3 top-2.5" />
+            <input
+              id="input-search-employees"
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by name, ID, title, email..."
+              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#2b2b2b] focus:outline-none focus:bg-[#fffbf2]"
+            />
+          </div>
+
+          {/* Section Filter */}
+          <div>
+            <select
+              id="select-filter-section"
+              value={selectedSection}
+              onChange={(e) => setSelectedSection(e.target.value as any)}
+              className="w-full px-3 py-1.5 text-xs rounded-lg border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#2b2b2b] focus:outline-none text-[#2b2b2b] font-medium"
+            >
+              <option value="all">All Wings / Sections</option>
+              {SECTIONS.filter(s => s !== 'all').map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status Filter */}
+          <div>
+            <select
+              id="select-filter-status"
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value as any)}
+              className="w-full px-3 py-1.5 text-xs rounded-lg border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#2b2b2b] focus:outline-none text-[#2b2b2b] font-medium"
+            >
+              <option value="all">All Statuses</option>
+              {STATUSES.filter(s => s !== 'all').map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Role Filter */}
+          <div>
+            <select
+              id="select-filter-role"
+              value={selectedRole}
+              onChange={(e) => setSelectedRole(e.target.value)}
+              className="w-full px-3 py-1.5 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-stone-700"
+            >
+              <option value="all">All Role Categories</option>
+              <option value="Director / HOD">Director / HOD</option>
+              <option value="District Officer">District Officer</option>
+              <option value="Section Officer">Section Officer</option>
+              <option value="Superintendent">Superintendent</option>
+              <option value="Inspector / Evaluator">Inspector / Evaluator</option>
+              <option value="Clerk / Assistant">Clerk / Assistant</option>
+              <option value="Faculty / Principal">Faculty / Principal</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Employee Roster Table */}
+        {filteredEmployees.length === 0 ? (
+          <div className="py-16 text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-stone-100 text-stone-400 flex items-center justify-center mx-auto">
+              <Users className="w-6 h-6" />
+            </div>
+            <h3 className="text-sm font-bold text-stone-800">No employees match your search</h3>
+            <p className="text-xs text-stone-500 max-w-sm mx-auto">
+              Try adjusting your filters, or register a new employee into the establishment directory.
+            </p>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setSelectedSection('all');
+                  setSelectedStatus('all');
+                  setSelectedRole('all');
+                }}
+                className="px-3 py-1.5 text-xs font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors"
+              >
+                Clear Filters
+              </button>
+              <button
+                onClick={onAddEmployee}
+                className="px-3 py-1.5 text-xs font-semibold text-white bg-stone-900 hover:bg-stone-800 rounded-lg transition-colors"
+              >
+                Add Employee
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            {/* Batch Selection Banner */}
+            {selectedIds.size > 0 && (
+              <div className="bg-amber-100/90 border-b border-amber-300 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 font-bold text-amber-950">
+                  <span className="w-2 h-2 rounded-full bg-amber-600 animate-pulse"></span>
+                  <span>{selectedIds.size} ನೌಕರರ ದಾಖಲೆಗಳನ್ನು ಆಯ್ಕೆಮಾಡಲಾಗಿದೆ ({selectedIds.size} Selected)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds(new Set())}
+                    className="px-2.5 py-1 text-xs bg-white text-stone-700 font-medium rounded-md border border-amber-300 hover:bg-stone-50"
+                  >
+                    ಆಯ್ಕೆ ರದ್ದು (Deselect)
+                  </button>
+                  {onBatchDeleteEmployees && (
+                    <button
+                      type="button"
+                      onClick={handleExecuteBatchDelete}
+                      disabled={isBatchDeleting}
+                      className="px-3 py-1 text-xs bg-rose-600 text-white font-bold rounded-md hover:bg-rose-700 shadow-xs flex items-center gap-1.5"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>ಆಯ್ಕೆಮಾಡಿದವರನ್ನು ಅಳಿಸಿ ({selectedIds.size} Delete)</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-stone-100/90 text-stone-700 font-semibold border-b border-stone-200">
+                  <tr>
+                    <th className="py-3 px-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.size === filteredEmployees.length && filteredEmployees.length > 0}
+                        onChange={handleToggleSelectAll}
+                        className="rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                        title="Select All"
+                      />
+                    </th>
+                    <th className="py-3 px-4">Official / Designation</th>
+                    <th className="py-3 px-4">Emp Code & KGID</th>
+                    <th className="py-3 px-4">Wing & Office Location</th>
+                    <th className="py-3 px-4">ಮೂಲ ವೇತನ (Basic Pay)</th>
+                    <th className="py-3 px-4">Contact</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {filteredEmployees.map((emp) => {
+                    const isSelected = selectedIds.has(emp.id);
+                    const initials = emp.fullName
+                      .replace(/^(Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.)\s*/i, '')
+                      .split(' ')
+                      .filter(Boolean)
+                      .map(n => n[0])
+                      .join('')
+                      .substring(0, 2)
+                      .toUpperCase();
+
+                    const { assignedLetters, custodianFiles } = getEmployeeAssignments(emp);
+
+                    return (
+                      <tr 
+                        key={emp.id}
+                        className={`transition-colors group ${
+                          isSelected ? 'bg-amber-50/70' : 'hover:bg-amber-50/30'
+                        }`}
+                      >
+                        {/* Checkbox */}
+                        <td className="py-3.5 px-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelectOne(emp.id)}
+                            className="rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                          />
+                        </td>
+
+                        {/* Name & Title */}
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-900 font-bold flex items-center justify-center text-xs shrink-0 border border-amber-200">
+                            {initials || 'ED'}
+                          </div>
+                          <div>
+                            <div className="font-bold text-stone-900 flex items-center gap-1.5">
+                              <span>{emp.fullName}</span>
+                              <span className="text-[10px] font-normal text-stone-500">
+                                ({emp.employmentType})
+                              </span>
+                            </div>
+                            <div className="text-stone-600 text-[11px] flex items-center gap-1">
+                              <span>{emp.designation}</span>
+                              <span className="text-stone-300">•</span>
+                              <span className="text-stone-500 text-[10px]">{emp.role}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Employee Code & KGID */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <div className="space-y-1">
+                          <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-stone-100 text-stone-800 border border-stone-200 block w-fit">
+                            {emp.employeeCode}
+                          </span>
+                          {emp.kgidNumber ? (
+                            <span className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200 block w-fit">
+                              KGID: {emp.kgidNumber}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-stone-400 italic">No KGID</span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Wing & Location */}
+                      <td className="py-3.5 px-4">
+                        <div className="font-medium text-stone-800">{emp.section}</div>
+                        <div className="text-[11px] text-stone-500 flex items-center gap-1 mt-0.5">
+                          <MapPin className="w-3 h-3 text-stone-400 shrink-0" />
+                          <span className="truncate max-w-[200px]">{emp.officeLocation}</span>
+                        </div>
+                      </td>
+
+                      {/* Basic Pay & Scale */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <div className="space-y-0.5">
+                          <div className="font-mono font-bold text-stone-900 text-xs flex items-center gap-1">
+                            <span className="text-stone-500 font-sans font-normal">₹</span>
+                            <span>{(emp.basicPay || 37900).toLocaleString('en-IN')}</span>
+                            <span className="text-[10px] text-stone-400 font-sans font-normal">/mo</span>
+                          </div>
+                          {emp.payScale && (
+                            <div className="text-[10px] text-stone-500 font-mono">
+                              {emp.payScale}
+                            </div>
+                          )}
+                          {emp.serviceHistory && emp.serviceHistory.length > 0 && (
+                            <div className="text-[10px] text-emerald-700 font-semibold flex items-center gap-0.5">
+                              <TrendingUp className="w-2.5 h-2.5" />
+                              <span>{emp.serviceHistory.length} orders recorded</span>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Contact */}
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-1 text-[11px] text-stone-700">
+                          <Mail className="w-3 h-3 text-stone-400 shrink-0" />
+                          <a href={`mailto:${emp.email}`} className="hover:text-amber-700 hover:underline truncate max-w-[170px]">
+                            {emp.email}
+                          </a>
+                        </div>
+                        <div className="flex items-center gap-1 text-[11px] text-stone-500 mt-0.5">
+                          <Phone className="w-3 h-3 text-stone-400 shrink-0" />
+                          <span>{emp.phone}</span>
+                        </div>
+                      </td>
+
+                      {/* Status */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        {getStatusBadge(emp.status)}
+                      </td>
+
+                      {/* Action buttons */}
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {onOpenServiceSanctions && (
+                            <button
+                              id={`btn-sanction-emp-${emp.id}`}
+                              onClick={() => onOpenServiceSanctions(emp)}
+                              className="px-2 py-1 text-[11px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg transition-colors flex items-center gap-1 shadow-2xs"
+                              title="ರಜೆ ಅಥವಾ ವೇತನ ಬಡ್ತಿ ಜ್ಞಾಪನಾ ಆದೇಶ ಸೃಜಿಸಿ (Leave & Increment Sanction Memo)"
+                            >
+                              <Award className="w-3 h-3 text-amber-700" />
+                              <span>ಆದೇಶ</span>
+                            </button>
+                          )}
+
+                          {onDraftLetterForEmployee && (
+                            <button
+                              id={`btn-draft-letter-emp-${emp.id}`}
+                              onClick={() => onDraftLetterForEmployee(emp)}
+                              className="px-2 py-1 text-[11px] font-bold text-sky-900 bg-sky-100 hover:bg-sky-200 border border-sky-300 rounded-lg transition-colors flex items-center gap-1 shadow-2xs"
+                              title="ಈ ನೌಕರರಿಗೆ ಸಾಮಾನ್ಯ ಪತ್ರ ತಯಾರಿಸಿ (Draft General Letter for Employee)"
+                            >
+                              <FileText className="w-3 h-3 text-sky-700" />
+                              <span>ಪತ್ರ</span>
+                            </button>
+                          )}
+
+                          <button
+                            id={`btn-view-emp-${emp.id}`}
+                            onClick={() => setSelectedEmployeeForDossier(emp)}
+                            className="p-1.5 text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors"
+                            title="View Employee Dossier & Assignments"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            id={`btn-edit-emp-${emp.id}`}
+                            onClick={() => onEditEmployee(emp)}
+                            className="p-1.5 text-amber-700 hover:text-amber-900 hover:bg-amber-100/60 rounded-lg transition-colors font-medium flex items-center gap-1"
+                            title="Edit / Update Employee Data"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span className="text-[11px] hidden sm:inline">Edit</span>
+                          </button>
+
+                          <button
+                            id={`btn-delete-emp-${emp.id}`}
+                            onClick={async () => {
+                              if (window.confirm(`Are you sure you want to remove employee record "${emp.fullName}" (${emp.employeeCode})?`)) {
+                                await onDeleteEmployee(emp.id);
+                              }
+                            }}
+                            className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="Archive / Remove Employee"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* MODAL: Employee Service Dossier & Assigned Dockets */}
+      {selectedEmployeeForDossier && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-stone-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="bg-stone-900 text-white px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center font-bold">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold tracking-tight text-white">
+                    Civil Service Officer Dossier
+                  </h3>
+                  <p className="text-[11px] text-stone-400 font-mono">
+                    {selectedEmployeeForDossier.employeeCode} • {selectedEmployeeForDossier.section}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedEmployeeForDossier(null)}
+                className="text-stone-400 hover:text-white p-1 rounded-lg hover:bg-stone-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
+              <div className="bg-stone-50 border border-stone-200 p-4 rounded-xl flex items-start justify-between">
+                <div>
+                  <h4 className="text-sm font-bold text-stone-900">
+                    {selectedEmployeeForDossier.fullName}
+                  </h4>
+                  <div className="text-stone-700 font-medium mt-0.5">
+                    {selectedEmployeeForDossier.designation}
+                  </div>
+                  <div className="text-stone-500 mt-1 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-stone-400" />
+                    <span>{selectedEmployeeForDossier.officeLocation}</span>
+                  </div>
+                </div>
+                <div>
+                  {getStatusBadge(selectedEmployeeForDossier.status)}
+                </div>
+              </div>
+
+              {/* Details grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-[11px]">
+                <div className="bg-amber-50/70 p-2.5 rounded-lg border border-amber-200">
+                  <span className="text-amber-800 font-semibold block text-[10px] uppercase tracking-wider">KGID Number</span>
+                  <span className="font-mono font-bold text-amber-950 text-xs">
+                    {selectedEmployeeForDossier.kgidNumber || 'Not Registered'}
+                  </span>
+                </div>
+                <div className="bg-emerald-50/70 p-2.5 rounded-lg border border-emerald-200">
+                  <span className="text-emerald-800 font-semibold block text-[10px] uppercase tracking-wider">ಮೂಲ ವೇತನ (Basic Pay)</span>
+                  <span className="font-mono font-bold text-emerald-950 text-xs">
+                    ₹{(selectedEmployeeForDossier.basicPay || 37900).toLocaleString('en-IN')}/-
+                  </span>
+                </div>
+                <div className="bg-stone-50/70 p-2.5 rounded-lg border border-stone-200/80">
+                  <span className="text-stone-500 block text-[10px] uppercase tracking-wider">Pay Scale</span>
+                  <span className="font-mono text-stone-800 font-semibold truncate block">
+                    {selectedEmployeeForDossier.payScale || '37900-70850'}
+                  </span>
+                </div>
+                <div className="bg-stone-50/70 p-2.5 rounded-lg border border-stone-200/80">
+                  <span className="text-stone-500 block">Cadre Role</span>
+                  <span className="font-semibold text-stone-800">{selectedEmployeeForDossier.role}</span>
+                </div>
+                <div className="bg-stone-50/70 p-2.5 rounded-lg border border-stone-200/80">
+                  <span className="text-stone-500 block">Employment Type</span>
+                  <span className="font-semibold text-stone-800">{selectedEmployeeForDossier.employmentType}</span>
+                </div>
+                {selectedEmployeeForDossier.placeOfWork && (
+                  <div className="bg-amber-50/50 p-2.5 rounded-lg border border-amber-200 sm:col-span-2">
+                    <span className="text-amber-800 font-semibold block text-[10px] uppercase tracking-wider">Place of Work (ಶಾಲಾ ಸ್ಥಳ / ನಿಯೋಜನೆ)</span>
+                    <span className="font-semibold text-stone-900">{selectedEmployeeForDossier.placeOfWork}</span>
+                  </div>
+                )}
+                {selectedEmployeeForDossier.gender && (
+                  <div className="bg-stone-50/70 p-2.5 rounded-lg border border-stone-200/80">
+                    <span className="text-stone-500 block">Gender (ಲಿಂಗ)</span>
+                    <span className="font-semibold text-stone-800">{selectedEmployeeForDossier.gender}</span>
+                  </div>
+                )}
+                {(selectedEmployeeForDossier.dob || selectedEmployeeForDossier.age) && (
+                  <div className="bg-stone-50/70 p-2.5 rounded-lg border border-stone-200/80">
+                    <span className="text-stone-500 block">DOB & Age (ಜನ್ಮ ದಿನಾಂಕ)</span>
+                    <span className="font-semibold text-stone-800">
+                      {selectedEmployeeForDossier.dob || 'N/A'}{selectedEmployeeForDossier.age ? ` (${selectedEmployeeForDossier.age} Yrs)` : ''}
+                    </span>
+                  </div>
+                )}
+                {selectedEmployeeForDossier.ddoCode && (
+                  <div className="bg-stone-50/70 p-2.5 rounded-lg border border-stone-200/80">
+                    <span className="text-stone-500 block">DDO Code (ಡಿಡಿಒ ಕೋಡ್)</span>
+                    <span className="font-mono font-semibold text-stone-800">{selectedEmployeeForDossier.ddoCode}</span>
+                  </div>
+                )}
+                {selectedEmployeeForDossier.parentName && (
+                  <div className="bg-stone-50/70 p-2.5 rounded-lg border border-stone-200/80">
+                    <span className="text-stone-500 block">Parent Name (ಪೋಷಕರ ಹೆಸರು)</span>
+                    <span className="font-semibold text-stone-800">{selectedEmployeeForDossier.parentName}</span>
+                  </div>
+                )}
+                {selectedEmployeeForDossier.epicNo && (
+                  <div className="bg-stone-50/70 p-2.5 rounded-lg border border-stone-200/80">
+                    <span className="text-stone-500 block">EPIC No (ಮತದಾರರ ಗುರುತು)</span>
+                    <span className="font-mono font-semibold text-stone-800">{selectedEmployeeForDossier.epicNo}</span>
+                  </div>
+                )}
+                {selectedEmployeeForDossier.hometown && (
+                  <div className="bg-stone-50/70 p-2.5 rounded-lg border border-stone-200/80">
+                    <span className="text-stone-500 block">Hometown (ಸ್ವಂತ ಊರು)</span>
+                    <span className="font-semibold text-stone-800">{selectedEmployeeForDossier.hometown}</span>
+                  </div>
+                )}
+                <div className="bg-stone-50/70 p-2.5 rounded-lg border border-stone-200/80">
+                  <span className="text-stone-500 block">Official Email</span>
+                  <span className="font-semibold text-stone-800 truncate block">{selectedEmployeeForDossier.email}</span>
+                </div>
+                <div className="bg-stone-50/70 p-2.5 rounded-lg border border-stone-200/80">
+                  <span className="text-stone-500 block">Contact Phone</span>
+                  <span className="font-semibold text-stone-800">{selectedEmployeeForDossier.phone}</span>
+                </div>
+                <div className="bg-stone-50/70 p-2.5 rounded-lg border border-stone-200/80">
+                  <span className="text-stone-500 block">Date of Joining</span>
+                  <span className="font-semibold text-stone-800">{selectedEmployeeForDossier.joiningDate}</span>
+                </div>
+                <div className="bg-stone-50/70 p-2.5 rounded-lg border border-stone-200/80">
+                  <span className="text-stone-500 block">Last Updated</span>
+                  <span className="font-semibold text-stone-800">{selectedEmployeeForDossier.lastUpdated}</span>
+                </div>
+              </div>
+
+              {/* Service Sanction History (Leave & Increments) */}
+              {selectedEmployeeForDossier.serviceHistory && selectedEmployeeForDossier.serviceHistory.length > 0 && (
+                <div className="p-3 bg-amber-50/40 rounded-xl border border-amber-200/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-stone-900 text-xs flex items-center gap-1.5">
+                      <Award className="w-3.5 h-3.5 text-amber-600" />
+                      <span>ಸೇವಾ ಇತಿಹಾಸ (Service & Pay Progression History)</span>
+                    </span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">
+                      {selectedEmployeeForDossier.serviceHistory.length} Sanctions
+                    </span>
+                  </div>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                    {selectedEmployeeForDossier.serviceHistory.map((rec) => (
+                      <div key={rec.id} className="p-2 bg-white rounded-lg border border-stone-200 flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-bold text-stone-900 flex items-center gap-1.5">
+                            <span>{rec.sanctionType}</span>
+                            <span className="text-[10px] font-normal text-stone-500">
+                              (ದಿನಾಂಕ: {rec.effectiveDate})
+                            </span>
+                          </div>
+                          <div className="text-[10px] font-mono text-stone-600 mt-0.5">
+                            ಆದೇಶ ಸಂ: {rec.orderNumber}
+                          </div>
+                          {(rec.totalDays || (rec as any).leaveDays) && (
+                            <div className="text-[10px] text-amber-800 font-semibold">
+                              ಮಂಜೂರಾದ ರಜೆ: {rec.totalDays || (rec as any).leaveDays} ದಿನಗಳು
+                            </div>
+                          )}
+                        </div>
+                        {Boolean((rec.revisedBasicPay || (rec as any).newBasicPay) && (rec.revisedBasicPay || (rec as any).newBasicPay) !== rec.previousBasicPay) && (
+                          <div className="text-right shrink-0">
+                            <span className="text-[10px] text-stone-400 line-through block">
+                              ₹{rec.previousBasicPay?.toLocaleString('en-IN')}
+                            </span>
+                            <span className="text-xs font-bold text-emerald-700 font-mono block">
+                              ₹{(rec.revisedBasicPay || (rec as any).newBasicPay)?.toLocaleString('en-IN')}/-
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Qualifications */}
+              {selectedEmployeeForDossier.qualifications && (
+                <div className="p-3 bg-stone-50/70 rounded-lg border border-stone-200/80">
+                  <span className="text-stone-500 font-medium block mb-0.5">Qualifications & Degrees</span>
+                  <p className="text-stone-800 font-medium">{selectedEmployeeForDossier.qualifications}</p>
+                </div>
+              )}
+
+              {/* Service Remarks */}
+              {selectedEmployeeForDossier.notes && (
+                <div className="p-3 bg-stone-50/70 rounded-lg border border-stone-200/80">
+                  <span className="text-stone-500 font-medium block mb-0.5">Dossier Notes</span>
+                  <p className="text-stone-700">{selectedEmployeeForDossier.notes}</p>
+                </div>
+              )}
+
+              {/* Active Department Correspondence & Dockets Handled */}
+              {(() => {
+                const { assignedLetters, custodianFiles } = getEmployeeAssignments(selectedEmployeeForDossier);
+                return (
+                  <div className="space-y-3 pt-2">
+                    <h5 className="font-bold text-stone-900 flex items-center justify-between border-b border-stone-200 pb-1.5">
+                      <span>Assigned Departmental Workload</span>
+                      <span className="text-stone-500 font-normal text-[11px]">
+                        {assignedLetters.length} Letters • {custodianFiles.length} Master Dockets
+                      </span>
+                    </h5>
+
+                    {assignedLetters.length > 0 && (
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] font-semibold text-stone-600 block">
+                          Assigned Correspondence ({assignedLetters.length})
+                        </span>
+                        {assignedLetters.map(l => (
+                          <div 
+                            key={l.id} 
+                            onClick={() => {
+                              if (onSelectLetter) {
+                                onSelectLetter(l);
+                                setSelectedEmployeeForDossier(null);
+                              }
+                            }}
+                            className="p-2 bg-stone-50 hover:bg-stone-100 rounded-lg border border-stone-200 flex items-center justify-between cursor-pointer"
+                          >
+                            <div>
+                              <span className="font-mono font-semibold text-[10px] text-stone-700 block">
+                                {l.referenceNumber}
+                              </span>
+                              <span className="text-stone-800 font-medium line-clamp-1">
+                                {l.subject}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 shrink-0">
+                              {l.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {custodianFiles.length > 0 && (
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] font-semibold text-stone-600 block">
+                          Custodian of Master Dockets ({custodianFiles.length})
+                        </span>
+                        {custodianFiles.map(f => (
+                          <div 
+                            key={f.id} 
+                            className="p-2 bg-stone-50 rounded-lg border border-stone-200 flex items-center justify-between"
+                          >
+                            <div>
+                              <span className="font-mono font-semibold text-[10px] text-stone-700 block">
+                                {f.fileNumber}
+                              </span>
+                              <span className="text-stone-800 font-medium line-clamp-1">
+                                {f.subject}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-stone-200 text-stone-800 shrink-0">
+                              {f.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {assignedLetters.length === 0 && custodianFiles.length === 0 && (
+                      <p className="text-stone-400 italic text-center py-2">
+                        No active dockets or letters currently assigned to this officer.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-stone-200 bg-stone-50 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const emp = selectedEmployeeForDossier;
+                    setSelectedEmployeeForDossier(null);
+                    onEditEmployee(emp);
+                  }}
+                  className="px-3.5 py-1.5 text-xs font-semibold text-stone-900 bg-white hover:bg-stone-100 border border-stone-300 rounded-lg shadow-2xs transition-colors flex items-center gap-1.5"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Edit Official</span>
+                </button>
+
+                {onOpenServiceSanctions && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const emp = selectedEmployeeForDossier;
+                      setSelectedEmployeeForDossier(null);
+                      onOpenServiceSanctions(emp);
+                    }}
+                    className="px-3.5 py-1.5 text-xs font-bold text-amber-950 bg-amber-400 hover:bg-amber-300 border border-amber-500/50 rounded-lg shadow-2xs transition-colors flex items-center gap-1.5"
+                  >
+                    <Award className="w-3.5 h-3.5 text-stone-950" />
+                    <span>ರಜೆ / ವೇತನ ಬಡ್ತಿ ಪ್ರಕ್ರಿಯೆ</span>
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedEmployeeForDossier(null)}
+                className="px-4 py-1.5 text-xs font-semibold text-white bg-stone-900 hover:bg-stone-800 rounded-lg transition-colors"
+              >
+                Close Dossier
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

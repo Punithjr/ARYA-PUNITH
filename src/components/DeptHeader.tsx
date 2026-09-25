@@ -1,0 +1,483 @@
+import React from 'react';
+import { 
+  Building2, 
+  FileText, 
+  FolderGit2, 
+  BarChart3, 
+  Sparkles, 
+  Plus, 
+  Inbox, 
+  Send, 
+  AlertTriangle,
+  FileSpreadsheet,
+  RotateCcw,
+  Users,
+  LogOut,
+  ShieldCheck,
+  UserCheck,
+  Award,
+  FileCheck2,
+  TrendingUp,
+  Search,
+  Settings,
+  Archive,
+  Layers,
+  School,
+  Calendar
+} from 'lucide-react';
+import { DakRegisterSummary, AdminAuthUser, AppNavTab } from '../types';
+export type { AppNavTab };
+
+interface DeptHeaderProps {
+  activeTab: AppNavTab;
+  setActiveTab: (tab: AppNavTab) => void;
+  summary: DakRegisterSummary | null;
+  onNewLetter: () => void;
+  onNewFile: () => void;
+  onOpenNewRtiFile?: () => void;
+  onOpenServiceSanctions?: () => void;
+  onOpenMasterAudit?: () => void;
+  onResetDemo: () => void;
+  employeesCount?: number;
+  currentUser?: AdminAuthUser | null;
+  onLogout?: () => void;
+}
+
+export const DeptHeader: React.FC<DeptHeaderProps> = ({
+  activeTab,
+  setActiveTab,
+  summary,
+  onNewLetter,
+  onNewFile,
+  onOpenNewRtiFile,
+  onOpenServiceSanctions,
+  onOpenMasterAudit,
+  onResetDemo,
+  employeesCount = 0,
+  currentUser,
+  onLogout,
+}) => {
+  return (
+    <header className="bg-[#fffbf2] border-b-[2.5px] border-[#2b2b2b] sticky top-0 z-30 shadow-[0_4px_0_rgba(43,43,43,0.06)]">
+      {/* Top Directorate Banner in Inky style */}
+      <div className="bg-[#2b2b2b] text-[#fffbf2] px-4 sm:px-6 py-2 border-b-2 border-[#2b2b2b] text-xs">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#10b981] animate-pulse"></span>
+            <span className="font-bold tracking-normal text-[#f59e0b] font-kannada text-xs">
+              ಕರ್ನಾಟಕ ಸರ್ಕಾರ • ಶಾಲಾ ಶಿಕ್ಷಣ ಮತ್ತು ಸಾಕ್ಷರತಾ ಇಲಾಖೆ
+            </span>
+            <span className="text-stone-500">•</span>
+            <span className="text-white font-bold font-kannada">
+              ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ ಭದ್ರಾವತಿ
+            </span>
+            <span className="hidden md:inline-block text-[10px] font-mono-code text-[#2b2b2b] bg-[#f59e0b] px-2 py-0.5 rounded font-bold uppercase">
+              BEO PORTAL [V1.0.42]
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3 text-[11px] font-mono-code text-stone-200">
+            <div className="flex items-center gap-1.5 bg-black/30 px-2 py-0.5 rounded border border-stone-700">
+              <Inbox className="w-3 h-3 text-sky-400" />
+              <span>INWARD: <strong>{summary?.totalInward ?? 0}</strong></span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-black/30 px-2 py-0.5 rounded border border-stone-700">
+              <Send className="w-3 h-3 text-emerald-400" />
+              <span>DISPATCHED: <strong>{summary?.totalOutward ?? 0}</strong></span>
+            </div>
+            {(summary?.overdueCount ?? 0) > 0 && (
+              <div className="flex items-center gap-1 text-rose-300 font-bold bg-rose-950/60 px-2 py-0.5 rounded border border-rose-800">
+                <AlertTriangle className="w-3 h-3" />
+                <span>{summary?.overdueCount} OVERDUE</span>
+              </div>
+            )}
+            <button
+              onClick={onResetDemo}
+              className="text-[10px] text-amber-300 hover:text-white underline ml-1 flex items-center gap-1 cursor-pointer font-sans"
+              title="Reset records to official department seed data"
+            >
+              <RotateCcw className="w-2.5 h-2.5" /> ಮಾದರಿ ಡೇಟಾ
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Header Row */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          {/* Logo & Portal Branding */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#2b2b2b] text-[#f59e0b] flex items-center justify-center font-bold border-2 border-[#2b2b2b] shadow-[3px_3px_0px_#f59e0b]">
+              <Building2 className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-bold text-[#2b2b2b] tracking-tight leading-none font-kannada">
+                  ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ ಭದ್ರಾವತಿ
+                </h1>
+                <span className="label-ink hidden sm:inline-block">
+                  BEO PORTAL
+                </span>
+              </div>
+              <p className="text-[11px] text-[#2b2b2b]/70 mt-0.5 hidden sm:block font-medium">
+                ನೌಕರರ ಜ್ಞಾಪನಾ ಆದೇಶ, ಸೇವಾ ಬಡ್ತಿ (ಪ್ರಪತ್ರ-೨೮), ಕಡತಗಳು ಹಾಗೂ ಸಾಮಾನ್ಯ ಪತ್ರ ತಂತ್ರಾಂಶ
+              </p>
+            </div>
+          </div>
+
+          {/* Action Buttons & Admin Profile */}
+          <div className="flex items-center gap-2">
+            <button
+              id="btn-quick-make-letter"
+              onClick={() => setActiveTab('generalLetter')}
+              className="px-3.5 py-1.5 text-xs font-bold text-[#2b2b2b] bg-[#f59e0b] hover:bg-[#e08e0b] rounded-lg transition-all inline-flex items-center gap-1.5 border-2 border-[#2b2b2b] shadow-[3px_3px_0px_#2b2b2b] hover:shadow-[4px_4px_0px_#2b2b2b] hover:-translate-x-0.5 hover:-translate-y-0.5 cursor-pointer font-kannada"
+              title="ಸಾಮಾನ್ಯ ಪತ್ರ ತಯಾರಿಸಿ (ನೌಕರರ ಸಾಮಾನ್ಯ ಪತ್ರ ಮತ್ತು ಇತರೆ ಸಾಮಾನ್ಯ ಪತ್ರ)"
+            >
+              <FileText className="w-3.5 h-3.5 text-[#2b2b2b]" />
+              <span>📄 ಸಾಮಾನ್ಯ ಪತ್ರ ತಯಾರಿಸಿ</span>
+            </button>
+
+            <button
+              id="btn-quick-new-memo"
+              onClick={() => setActiveTab('memorandum')}
+              className="px-3.5 py-1.5 text-xs font-bold text-white bg-[#2b2b2b] hover:bg-[#1f1f1f] rounded-lg transition-all inline-flex items-center gap-1.5 border-2 border-[#2b2b2b] shadow-[3px_3px_0px_#10b981] hover:shadow-[4px_4px_0px_#10b981] hover:-translate-x-0.5 hover:-translate-y-0.5 cursor-pointer font-kannada"
+              title="ನೂತನ ಜ್ಞಾಪನಾ ಆದೇಶ ಸೃಜಿಸಿ"
+            >
+              <Award className="w-3.5 h-3.5 text-[#f59e0b]" />
+              <span>+ ಜ್ಞಾಪನಾ ಆದೇಶ</span>
+            </button>
+
+            {onOpenNewRtiFile && (
+              <button
+                id="btn-quick-new-rti"
+                onClick={onOpenNewRtiFile}
+                className="hidden sm:inline-flex px-3 py-1.5 text-xs font-bold text-[#2b2b2b] bg-white hover:bg-[#fffbf2] rounded-lg transition-all items-center gap-1.5 border-2 border-[#2b2b2b] shadow-[3px_3px_0px_#2b2b2b] hover:-translate-x-0.5 hover:-translate-y-0.5 cursor-pointer font-kannada"
+                title="ಮಾಹಿತಿ ಹಕ್ಕು ಕಡತ ಸೃಜಿಸಿ (PDF/JPG ಅಪ್‌ಲೋಡ್)"
+              >
+                <FileCheck2 className="w-3.5 h-3.5 text-[#2b2b2b]" />
+                <span>+ RTI ಕಡತ</span>
+              </button>
+            )}
+
+            <button
+              id="btn-quick-circular"
+              onClick={() => setActiveTab('circularStudio')}
+              className="hidden md:inline-flex px-3 py-1.5 text-xs font-bold text-white bg-indigo-900 hover:bg-indigo-800 rounded-lg transition-all items-center gap-1.5 border-2 border-[#2b2b2b] shadow-[3px_3px_0px_#818cf8] hover:-translate-x-0.5 hover:-translate-y-0.5 cursor-pointer font-kannada"
+              title="ಶಾಸನಬದ್ಧ ಸುತ್ತೋಲೆ ರಚನೆ (KCSR, RTE, KSMOP)"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-indigo-300" />
+              <span>+ ಸುತ್ತೋಲೆ</span>
+            </button>
+
+            <button
+              id="btn-quick-master-audit"
+              onClick={() => onOpenMasterAudit ? onOpenMasterAudit() : setActiveTab('masterAudit')}
+              className="hidden lg:inline-flex px-3 py-1.5 text-xs font-bold text-amber-950 bg-amber-200 hover:bg-amber-300 rounded-lg transition-all items-center gap-1.5 border-2 border-[#2b2b2b] shadow-[3px_3px_0px_#2b2b2b] hover:-translate-x-0.5 hover:-translate-y-0.5 cursor-pointer font-kannada"
+              title="e-Office ಕಡತ ಲೆಕ್ಕಪರಿಶೋಧನೆ (Master Docket Auditing)"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-900" />
+              <span>🔍 ಕಡತ ಆಡಿಟ್</span>
+            </button>
+
+            {/* Admin User Chip & Logout */}
+            <div className="hidden sm:flex items-center gap-1.5 pl-2 border-l-2 border-[#2b2b2b]">
+              <div 
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-white border-2 border-[#2b2b2b] rounded-lg text-xs shadow-[2px_2px_0px_#2b2b2b]"
+                title="Logged in as Authorized System Administrator"
+              >
+                <div className="w-5 h-5 rounded-full bg-[#2b2b2b] text-[#f59e0b] font-bold flex items-center justify-center text-[10px] font-mono-code">
+                  A
+                </div>
+                <div className="leading-tight">
+                  <span className="font-bold text-[#2b2b2b] block text-[11px] font-mono-code">admin</span>
+                  <span className="text-[9px] text-stone-500 block uppercase font-mono-code font-bold">SYSTEM ADMIN</span>
+                </div>
+              </div>
+
+              {onLogout && (
+                <button
+                  id="btn-admin-logout"
+                  onClick={onLogout}
+                  className="p-1.5 text-[#2b2b2b] hover:text-rose-700 bg-white hover:bg-rose-50 rounded-lg transition-all border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#2b2b2b] cursor-pointer"
+                  title="ನಿರ್ಗಮಿಸಿ (Logout Admin)"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* PRIMARY GOVERNMENT NAVIGATION BAR: THE 7 CORE KANNADA MODULES + LETTER MAKER */}
+        <div className="flex items-center justify-between overflow-x-auto py-2 border-t-2 border-[#2b2b2b] gap-1.5 scrollbar-none">
+          <div className="flex items-center gap-1.5">
+            {/* 0. ಮುಖಪುಟ (Home Dashboard) */}
+            <button
+              id="nav-tab-home"
+              onClick={() => setActiveTab('home')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'home'
+                  ? 'bg-[#2b2b2b] text-[#f59e0b] shadow-[3px_3px_0px_#f59e0b] -translate-y-0.5'
+                  : 'bg-white text-[#2b2b2b] hover:bg-[#fffbf2] shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5 text-[#f59e0b]" />
+              <span>🏠 ಮುಖಪುಟ (Home)</span>
+            </button>
+
+            {/* ಕಡತಗಳ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್ (File Dashboard & Movement Tracking) */}
+            <button
+              id="nav-tab-file-dashboard"
+              onClick={() => setActiveTab('fileDashboard')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'fileDashboard'
+                  ? 'bg-[#2b2b2b] text-[#f59e0b] shadow-[3px_3px_0px_#f59e0b] -translate-y-0.5'
+                  : 'bg-amber-50 text-[#2b2b2b] hover:bg-amber-100 shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+              title="ಪಿಂಚಣಿ, ಬಡ್ತಿ, ಶಿಸ್ತು ಕ್ರಮ ಹಾಗೂ ಕಡತಗಳ ಚಲನವಲನ ಟೈಮ್‌ಲೈನ್"
+            >
+              <FolderGit2 className="w-3.5 h-3.5 text-[#f59e0b]" />
+              <span>📁 ಕಡತಗಳ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್</span>
+            </button>
+
+            {/* 1. ಸಾಮಾನ್ಯ ಪತ್ರ ತಯಾರಿಸಿ */}
+            <button
+              id="nav-tab-make-general-letter"
+              onClick={() => setActiveTab('generalLetter')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'generalLetter'
+                  ? 'bg-[#f59e0b] text-[#2b2b2b] shadow-[3px_3px_0px_#2b2b2b] -translate-y-0.5'
+                  : 'bg-amber-100/70 text-[#2b2b2b] hover:bg-amber-100 shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5 text-[#2b2b2b]" />
+              <span>೧. ಸಾಮಾನ್ಯ ಪತ್ರ</span>
+            </button>
+
+            {/* 2. ಜ್ಞಾಪನಾ ಆದೇಶ */}
+            <button
+              id="nav-tab-memorandum"
+              onClick={() => setActiveTab('memorandum')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'memorandum'
+                  ? 'bg-[#2b2b2b] text-[#fffbf2] shadow-[3px_3px_0px_#10b981] -translate-y-0.5'
+                  : 'bg-white text-[#2b2b2b] hover:bg-[#fffbf2] shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+            >
+              <Award className="w-3.5 h-3.5 text-[#10b981]" />
+              <span>೨. ಜ್ಞಾಪನಾ ಆದೇಶ</span>
+            </button>
+
+            {/* 3. ಪ್ರಪತ್ರ-೨೮ [ವೇತನ ಬಡ್ತಿ] */}
+            <button
+              id="nav-tab-prapathra28"
+              onClick={() => setActiveTab('prapathra28')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'prapathra28'
+                  ? 'bg-[#2b2b2b] text-[#f59e0b] shadow-[3px_3px_0px_#f59e0b] -translate-y-0.5'
+                  : 'bg-white text-[#2b2b2b] hover:bg-[#fffbf2] shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-[#f59e0b]" />
+              <span>೩. ಪ್ರಪತ್ರ-೨೮ [ವೇತನ ಬಡ್ತಿ]</span>
+            </button>
+
+            {/* 4. ನೌಕರರ ಮಾಹಿತಿ */}
+            <button
+              id="nav-tab-employees"
+              onClick={() => setActiveTab('employees')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'employees'
+                  ? 'bg-[#2b2b2b] text-white shadow-[3px_3px_0px_#10b981] -translate-y-0.5'
+                  : 'bg-white text-[#2b2b2b] hover:bg-[#fffbf2] shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5 text-[#10b981]" />
+              <span>೪. ನೌಕರರ ಮಾಹಿತಿ</span>
+              {employeesCount > 0 && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#f59e0b] text-[#2b2b2b] font-mono-code font-bold">
+                  {employeesCount}
+                </span>
+              )}
+            </button>
+
+            {/* ರಜೆ ಕ್ಯಾಲೆಂಡರ್ (Leave Calendar) */}
+            <button
+              id="nav-tab-leave-calendar"
+              onClick={() => setActiveTab('leaveCalendar')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'leaveCalendar'
+                  ? 'bg-[#e11d48] text-white shadow-[3px_3px_0px_#2b2b2b] -translate-y-0.5'
+                  : 'bg-rose-50 text-rose-950 hover:bg-rose-100 shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+              title="ಮಹಿಳಾ ನೌಕರರ ಶಿಶುಪಾಲನ ರಜೆ (180 ದಿನಗಳು) & ಹೆರಿಗೆ ರಜೆ ಕ್ಯಾಲೆಂಡರ್ ಹಾಗೂ ಕೋಟಾ ನಿರ್ವಹಣೆ"
+            >
+              <Calendar className="w-3.5 h-3.5 text-rose-600" />
+              <span>📅 ರಜೆ ಕ್ಯಾಲೆಂಡರ್</span>
+            </button>
+
+            {/* ಪಿಂಚಣಿ & ನಿವೃತ್ತಿ ನಿರ್ವಹಣೆ (Pension & Retirement Management) */}
+            <button
+              id="nav-tab-pension"
+              onClick={() => setActiveTab('pension')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'pension'
+                  ? 'bg-[#d97706] text-white shadow-[3px_3px_0px_#2b2b2b] -translate-y-0.5'
+                  : 'bg-amber-100 text-stone-900 hover:bg-amber-200 shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+              title="ಪಿಂಚಣಿ ಲೆಕ್ಕಾಚಾರ, ನಮೂನೆ-೭, ಆದೇಶಗಳು & ಕಡತ ನಿರ್ವಹಣೆ (Pension & KCSR Calculation)"
+            >
+              <Award className="w-3.5 h-3.5 text-amber-700" />
+              <span>🎖️ ಪಿಂಚಣಿ & ನಿವೃತ್ತಿ</span>
+            </button>
+
+            {/* 5. ಆದೇಶಗಳ ಕಡತ */}
+            <button
+              id="nav-tab-order-files"
+              onClick={() => setActiveTab('orderFiles')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'orderFiles'
+                  ? 'bg-[#2b2b2b] text-white shadow-[3px_3px_0px_#f59e0b] -translate-y-0.5'
+                  : 'bg-white text-[#2b2b2b] hover:bg-[#fffbf2] shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+            >
+              <Archive className="w-3.5 h-3.5 text-[#f59e0b]" />
+              <span>೫. ಆದೇಶಗಳ ಕಡತ</span>
+            </button>
+
+            {/* 6. ವೇತನ ಬದಲಾವಣೆ */}
+            <button
+              id="nav-tab-salary-changes"
+              onClick={() => setActiveTab('salaryChanges')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'salaryChanges'
+                  ? 'bg-[#2b2b2b] text-white shadow-[3px_3px_0px_#10b981] -translate-y-0.5'
+                  : 'bg-white text-[#2b2b2b] hover:bg-[#fffbf2] shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5 text-[#10b981]" />
+              <span>೬. ವೇತನ ಬದಲಾವಣೆ</span>
+            </button>
+
+            {/* 7. ವರದಿಗಳು */}
+            <button
+              id="nav-tab-reports"
+              onClick={() => setActiveTab('reports')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'reports'
+                  ? 'bg-[#2b2b2b] text-white shadow-[3px_3px_0px_#38bdf8] -translate-y-0.5'
+                  : 'bg-white text-[#2b2b2b] hover:bg-[#fffbf2] shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5 text-blue-500" />
+              <span>೭. ವರದಿಗಳು</span>
+            </button>
+
+            {/* 6. Search */}
+            <button
+              id="nav-tab-search"
+              onClick={() => setActiveTab('search')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'search'
+                  ? 'bg-[#2b2b2b] text-white shadow-[3px_3px_0px_#a855f7] -translate-y-0.5'
+                  : 'bg-white text-[#2b2b2b] hover:bg-[#fffbf2] shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+            >
+              <Search className="w-3.5 h-3.5 text-purple-500" />
+              <span>೬. ಹುಡುಕಾಟ</span>
+            </button>
+
+            {/* 7. Settings */}
+            <button
+              id="nav-tab-settings"
+              onClick={() => setActiveTab('settings')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'settings'
+                  ? 'bg-[#2b2b2b] text-white shadow-[3px_3px_0px_#e5e7eb] -translate-y-0.5'
+                  : 'bg-white text-[#2b2b2b] hover:bg-[#fffbf2] shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5 text-stone-500" />
+              <span>೭. ಸೆಟ್ಟಿಂಗ್ಸ್</span>
+            </button>
+
+            {/* 8. ಶಾಲೆಗಳು & ಅನುದಾನ */}
+            <button
+              id="nav-tab-schools"
+              onClick={() => setActiveTab('schools')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'schools'
+                  ? 'bg-[#10b981] text-white shadow-[3px_3px_0px_#2b2b2b] -translate-y-0.5'
+                  : 'bg-emerald-50 text-[#2b2b2b] hover:bg-emerald-100 shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+            >
+              <School className="w-3.5 h-3.5 text-emerald-800" />
+              <span>೮. ಶಾಲೆಗಳು</span>
+            </button>
+
+            {/* 9. ಶಾಸನಬದ್ಧ ಸುತ್ತೋಲೆಗಳು (Statutory Circulars) */}
+            <button
+              id="nav-tab-circulars"
+              onClick={() => setActiveTab('circularStudio')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'circularStudio'
+                  ? 'bg-indigo-900 text-white shadow-[3px_3px_0px_#f59e0b] -translate-y-0.5'
+                  : 'bg-indigo-50 text-indigo-950 hover:bg-indigo-100 shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+              title="ಸ್ವಯಂಚಾಲಿತ ಶಾಸನಬದ್ಧ ಸುತ್ತೋಲೆಗಳ ರಚನೆ (KCSR, RTE, KSMOP)"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+              <span>೯. ಶಾಸನಬದ್ಧ ಸುತ್ತೋಲೆ</span>
+            </button>
+
+            {/* 10. ಕಡತ ಆಡಿಟ್ (Master Docket Auditing) */}
+            <button
+              id="nav-tab-docket-audit"
+              onClick={() => onOpenMasterAudit ? onOpenMasterAudit() : setActiveTab('masterAudit')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'masterAudit'
+                  ? 'bg-amber-800 text-white shadow-[3px_3px_0px_#2b2b2b] -translate-y-0.5'
+                  : 'bg-amber-100/80 text-amber-950 hover:bg-amber-200 shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+              title="e-Office ಕಡತಗಳ ಪೂರ್ಣ ಲೆಕ್ಕಪರಿಶೋಧನೆ ಹಾಗೂ KSMOP ವಿಂಗಡಣೆ"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-800" />
+              <span>೧೦. ಕಡತ ಆಡಿಟ್</span>
+            </button>
+          </div>
+
+          {/* Secondary Hub for Correspondence & RTI */}
+          <div className="flex items-center gap-2 pl-2 border-l-2 border-[#2b2b2b] shrink-0">
+            <button
+              id="nav-tab-letters-registry"
+              onClick={() => setActiveTab('registry')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'registry' || activeTab === 'files' || activeTab === 'drafter'
+                  ? 'bg-[#2b2b2b] text-[#fffbf2] shadow-[2.5px_2.5px_0px_#f59e0b]'
+                  : 'bg-white text-[#2b2b2b] hover:bg-[#fffbf2] shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+              title="ಪತ್ರ ವ್ಯವಹಾರಗಳು & e-Dak"
+            >
+              <FileText className="w-3.5 h-3.5 text-sky-600" />
+              <span>ಪತ್ರಗಳು ({summary?.totalLetters ?? 0})</span>
+            </button>
+
+            <button
+              id="nav-tab-rti"
+              onClick={() => setActiveTab('rti')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'rti'
+                  ? 'bg-[#f59e0b] text-[#2b2b2b] shadow-[2.5px_2.5px_0px_#2b2b2b]'
+                  : 'bg-amber-100 text-[#2b2b2b] hover:bg-amber-200 shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+              title="ಮಾಹಿತಿ ಹಕ್ಕು ಕಡತಗಳು & ಉತ್ತರ ತಯಾರಿಕೆ"
+            >
+              <FileCheck2 className="w-3.5 h-3.5 text-[#2b2b2b]" />
+              <span>RTI ಕಡತಗಳು</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+};

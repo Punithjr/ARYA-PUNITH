@@ -54,6 +54,19 @@ export const Prapathra28Studio: React.FC<Prapathra28StudioProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
+  // Dynamic DDO Signatory pulled from employee isDdo flag
+  const ddoOfficer = useMemo(() => {
+    const emp = employees.find(e => e.isDdo === true) || 
+                employees.find(e => e.designation?.toLowerCase().includes('ddo')) || 
+                employees.find(e => e.designation?.includes('ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿ'));
+    return {
+      name: emp?.fullName || 'ಹೆಚ್. ರವಿಕುಮಾರ್',
+      designation: emp?.designation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ',
+      office: emp?.placeOfWork || emp?.officeLocation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
+      code: emp?.ddoCode || '14041ED001',
+    };
+  }, [employees]);
+
   // Sync if initialMonth prop changes
   React.useEffect(() => {
     if (initialMonth && (initialMonth === 'January' || initialMonth === 'July')) {
@@ -575,9 +588,10 @@ export const Prapathra28Studio: React.FC<Prapathra28StudioProps> = ({
 
                 <div className="text-center space-y-1">
                   <div className="h-10"></div>
-                  <p className="font-black text-stone-950 text-sm">ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು ಹಾಗೂ DDO</p>
-                  <p className="text-[11px] text-stone-700">ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ</p>
-                  <p className="text-[10px] text-stone-500 font-mono">DDO Code: 1401QE0001</p>
+                  <p className="font-black text-stone-950 text-sm">({ddoOfficer.name})</p>
+                  <p className="font-bold text-xs text-stone-800">{ddoOfficer.designation}</p>
+                  <p className="text-[11px] text-stone-700">{ddoOfficer.office}</p>
+                  <p className="text-[10px] text-stone-500 font-mono">DDO Code: {ddoOfficer.code}</p>
                 </div>
               </div>
             </div>
@@ -749,9 +763,9 @@ export const Prapathra28Studio: React.FC<Prapathra28StudioProps> = ({
 
                 <div className="text-center space-y-1">
                   <div className="h-10"></div>
-                  <p className="font-black text-stone-950 text-sm">ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು</p>
-                  <p className="text-xs text-stone-800">ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಾರ್ಯಾಲಯ</p>
-                  <p className="text-xs text-stone-700">ಭದ್ರಾವತಿ - ೫೭೭೩೦೧</p>
+                  <p className="font-black text-stone-950 text-sm">({ddoOfficer.name})</p>
+                  <p className="text-xs font-bold text-stone-800">{ddoOfficer.designation}</p>
+                  <p className="text-xs text-stone-700">{ddoOfficer.office}</p>
                 </div>
               </div>
             </div>

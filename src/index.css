@@ -196,6 +196,7 @@ body {
   #printable-audit-report,
   #form-28-print-container,
   #office-order-print-container,
+  #a4-print-preview-modal-sheet,
   .memorandum-doc,
   .official-letter-paper,
   .printable-document,
@@ -211,6 +212,21 @@ body {
     line-height: 1.5 !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+  }
+
+  /* When Print Preview Modal is active, hide everything behind the overlay */
+  body.print-preview-modal-active #root > *:not(#a4-print-preview-overlay),
+  body.print-preview-modal-active #root > div:not(#a4-print-preview-overlay) {
+    display: none !important;
+  }
+
+  #a4-print-preview-overlay {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    inset: auto !important;
+    display: block !important;
   }
 
   /* Table styling for print */

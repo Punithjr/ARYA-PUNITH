@@ -227,6 +227,12 @@ export const LeaveCalendarView: React.FC<LeaveCalendarViewProps> = ({
   onDraftLetterForEmployee,
   showToast
 }) => {
+  // Dynamically resolve DDO Officer from employees list isDdo flag
+  const ddoEmp = employees?.find(e => e.isDdo === true) || 
+                 employees?.find(e => e.designation?.toLowerCase().includes('ddo')) || 
+                 employees?.find(e => e.designation?.includes('ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿ'));
+  const ddoOfficerName = ddoEmp?.fullName || 'ಹೆಚ್. ರವಿಕುಮಾರ್';
+  const ddoOfficerDesig = ddoEmp?.designation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ';
   // Current month & year state (Default to March 2026)
   const [currentYear, setCurrentYear] = useState<number>(2026);
   const [currentMonthIndex, setCurrentMonthIndex] = useState<number>(2); // 0-indexed: 2 = March
@@ -514,7 +520,7 @@ export const LeaveCalendarView: React.FC<LeaveCalendarViewProps> = ({
       escapeCsv('ಕರ್ನಾಟಕ ಸರ್ಕಾರ - ಶಾಲಾ ಶಿಕ್ಷಣ ಮತ್ತು ಸಾಕ್ಷರತಾ ಇಲಾಖೆ'),
       escapeCsv('ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು, ಶಿವಮೊಗ್ಗ ಜಿಲ್ಲೆ - 577301'),
       escapeCsv(`ಅಧಿಕೃತ ಮಾಸಿಕ ರಜೆ ಕ್ಯಾಲೆಂಡರ್ ಹಾಗೂ ಕೋಟಾ ವರದಿ (Official Monthly Leave & Quota Visualization Report)`),
-      escapeCsv(`ವರದಿ ತಿಂಗಳು & ವರ್ಷ: ${KANNADA_MONTHS[currentMonthIndex]} ${currentYear} | ಸಕ್ಷಮ ಪ್ರಾಧಿಕಾರ: ಬಿ.ಕೆ. ನಾರಾಯಣಪ್ಪ, ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು (BEO), ಭದ್ರಾವತಿ`),
+      escapeCsv(`ವರದಿ ತಿಂಗಳು & ವರ್ಷ: ${KANNADA_MONTHS[currentMonthIndex]} ${currentYear} | ಸಕ್ಷಮ ಪ್ರಾಧಿಕಾರ: ${ddoOfficerName}, ${ddoOfficerDesig}, ಭದ್ರಾವತಿ`),
       escapeCsv(`ವರದಿ ಸೃಜಿಸಿದ ದಿನಾಂಕ & ಸಮಯ: ${new Date().toLocaleString('en-IN')} | ಅಧಿಕೃತ ಕಡತ ದಾಖಲೆ`),
       '' // blank row
     ];
@@ -576,7 +582,7 @@ export const LeaveCalendarView: React.FC<LeaveCalendarViewProps> = ({
         r.quotaBefore ?? 180,
         r.quotaConsumed ?? r.daysCount,
         r.quotaRemaining ?? Math.max(0, 180 - (r.quotaConsumed || 0)),
-        escapeCsv('ಬಿ.ಕೆ. ನಾರಾಯಣಪ್ಪ, ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು')
+        escapeCsv(`${ddoOfficerName}, ${ddoOfficerDesig}, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು`)
       ].join(',');
     });
 
@@ -588,7 +594,7 @@ export const LeaveCalendarView: React.FC<LeaveCalendarViewProps> = ({
       [escapeCsv('ಒಟ್ಟು ರಜಾ ದಿನಗಳ ಮೊತ್ತ:'), totalOverallDays].join(','),
       '',
       escapeCsv('ಪ್ರಮಾಣೀಕರಣ: ಈ ಮೇಲ್ಕಂಡ ಮಾಸಿಕ ರಜೆ ಹಾಗೂ ಶಿಶುಪಾಲನ/ಹೆರಿಗೆ ರಜೆ ವಿವರಗಳನ್ನು ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು ಕಡತಗಳ ಅನ್ವಯ ಪರಿಶೀಲಿಸಿ ದೃಢೀಕರಿಸಲಾಗಿದೆ.'),
-      escapeCsv('ಸಕ್ಷಮ ಪ್ರಾಧಿಕಾರದ ಸಹಿ: (ಬಿ.ಕೆ. ನಾರಾಯಣಪ್ಪ), ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು, ಶಾಲಾ ಶಿಕ್ಷಣ ಮತ್ತು ಸಾಕ್ಷರತಾ ಇಲಾಖೆ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು.')
+      escapeCsv(`ಸಕ್ಷಮ ಪ್ರಾಧಿಕಾರದ ಸಹಿ: (${ddoOfficerName}), ${ddoOfficerDesig}, ಶಾಲಾ ಶಿಕ್ಷಣ ಮತ್ತು ಸಾಕ್ಷರತಾ ಇಲಾಖೆ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು.`)
     ];
 
     const csvBody = [

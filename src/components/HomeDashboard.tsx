@@ -25,7 +25,9 @@ import {
   Copy,
   Tag,
   TrendingUp,
-  Archive
+  Archive,
+  Scale,
+  Settings
 } from 'lucide-react';
 import {
   Employee,
@@ -164,6 +166,42 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   const [empModuleSearch, setEmpModuleSearch] = useState('');
   const [empModuleFilter, setEmpModuleFilter] = useState<'all' | 'female' | 'jan' | 'july'>('all');
   const [empModuleLimit, setEmpModuleLimit] = useState(8);
+
+  // All Menus Search & Category Filter for Dashboard
+  const [allMenuSearch, setAllMenuSearch] = useState('');
+  const [menuFilterCategory, setMenuFilterCategory] = useState<'all' | 'files' | 'letters' | 'salary' | 'schools' | 'admin'>('all');
+
+  const allDashboardMenus = useMemo(() => [
+    { id: 'fileDashboard', title: '೧. ಕಡತಗಳ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್', desc: 'ಕಡತಗಳ ಚಲನವಲನ ಟೈಮ್‌ಲೈನ್, KSMOP ವರ್ಗೀಕರಣ', icon: FolderGit2, tab: 'fileDashboard' as AppNavTab, category: 'files', badge: 'KSMOP' },
+    { id: 'generalLetter', title: '೨. ಸಾಮಾನ್ಯ ಕಡತ / ಪತ್ರ', desc: 'ನೌಕರರ ಸಾಮಾನ್ಯ ಪತ್ರ & ಇತರೆ ಅಧಿಕೃತ ಪತ್ರ ಸ್ಟುಡಿಯೋ', icon: FileText, tab: 'generalLetter' as AppNavTab, category: 'letters', badge: 'ನಿಯಮಾನುಸಾರ' },
+    { id: 'memorandum', title: '೩. ಜ್ಞಾಪನಾ ಆದೇಶ', desc: '10/15/20/25/30 ವರ್ಷ ಬಡ್ತಿ & ರಜೆ ಮಂಜೂರಾತಿ', icon: Award, tab: 'memorandum' as AppNavTab, category: 'letters', badge: 'ಸೇವಾ ಬಡ್ತಿ' },
+    { id: 'prapathra28', title: '೪. ಪ್ರಪತ್ರ-೨೮ [ವೇತನ ಬಡ್ತಿ]', desc: 'ವಾರ್ಷಿಕ ವೇತನ ಬಡ್ತಿ ಜನವರಿ & ಜುಲೈ ಪಟ್ಟಿ', icon: FileSpreadsheet, tab: 'prapathra28' as AppNavTab, category: 'salary', badge: 'ಜನವರಿ / ಜುಲೈ' },
+    { id: 'employees', title: '೫. ನೌಕರರ ಮಾಹಿತಿ & ಸೇವೆ', desc: 'ಸೇವಾ ವಿವರ, DDO ಮತ್ತು ರಜೆ ಶಿಲ್ಕು ದಾಖಲೆಗಳು', icon: Users, tab: 'employees' as AppNavTab, category: 'salary', badge: 'DDO & ಶಿಲ್ಕು' },
+    { id: 'leaveCalendar', title: '೬. ರಜೆ ಕ್ಯಾಲೆಂಡರ್ (180 ದಿನಗಳು)', desc: 'ಮಹಿಳಾ ಶಿಶುಪಾಲನ ರಜೆ & ಹೆರಿಗೆ ರಜೆ ನಿರ್ವಹಣೆ', icon: Calendar, tab: 'leaveCalendar' as AppNavTab, category: 'salary', badge: '180 ದಿನಗಳು' },
+    { id: 'pension', title: '೭. ಪಿಂಚಣಿ & ನಿವೃತ್ತಿ ನಿರ್ವಹಣೆ', desc: 'ಪಿಂಚಣಿ ಲೆಕ್ಕಾಚಾರ, ನಮೂನೆ-೭, ಆದೇಶಗಳು', icon: Scale, tab: 'pension' as AppNavTab, category: 'salary', badge: 'KCSR ನಿವೃತ್ತಿ' },
+    { id: 'orderFiles', title: '೮. ಆದೇಶಗಳ ಕಡತ', desc: 'ಹೊರಡಿಸಲಾದ ಅಧಿಕೃತ ಜ್ಞಾಪನಾ ಕಡತಗಳ ಭಂಡಾರ', icon: FileCheck2, tab: 'orderFiles' as AppNavTab, category: 'files', badge: 'ದಾಖಲೆಗಳು' },
+    { id: 'salaryChanges', title: '೯. ಕೆಸಿಎಸ್‌ಆರ್ ವೇತನ ಕೋಷ್ಟಕ', desc: 'ವೇತನ ಮ್ಯಾಟ್ರಿಕ್ಸ್ ಹಾಗೂ ವೇತನ ಬದಲಾವಣೆ ಇತಿಹಾಸ', icon: TrendingUp, tab: 'salaryChanges' as AppNavTab, category: 'salary', badge: 'Pay Matrix' },
+    { id: 'registry', title: '೧೦. ಆವಕ-ಜಾವಕ ಇ-ದಪ್ತರ್', desc: 'ಇನ್ವರ್ಡ್ ಮತ್ತು ಔಟ್ವರ್ಡ್ ಅಂಚೆ ನಿರ್ವಹಣೆ', icon: Tag, tab: 'registry' as AppNavTab, category: 'files', badge: 'e-Dak' },
+    { id: 'files', title: '೧೧. ಕಡತಾಗಾರ & ಇ-ದಾಖಲೆಗಳು', desc: 'ಆ2 ಶಾಖೆಯ ಮಾಸ್ಟರ್ ಕಡತಗಳು & ನೋಂದಣಿ', icon: Archive, tab: 'files' as AppNavTab, category: 'files', badge: 'ಆ2 ಶಾಖೆ' },
+    { id: 'schools', title: '೧೨. ಅನುದಾನಿತ ಶಾಲೆಗಳ ಪಟ್ಟಿ', desc: 'ಭದ್ರಾವತಿ ವ್ಯಾಪ್ತಿಯ ಅನುದಾನಿತ ಶಾಲೆಗಳ ಡೈರೆಕ್ಟರಿ', icon: School, tab: 'schools' as AppNavTab, category: 'schools', badge: 'ಭದ್ರಾವತಿ' },
+    { id: 'drafter', title: '೧೩. ಅಧಿಕೃತ ಆದೇಶಗಳು / ಕರಡು', desc: 'ಅಧಿಕೃತ ಕಚೇರಿ ಆದೇಶಗಳು, ಕರಡು & ಇಲಾಖಾ ಪತ್ರಗಳು', icon: FileText, tab: 'drafter' as AppNavTab, category: 'letters', badge: 'ಕರಡು ಪ್ರತಿ' },
+    { id: 'circularStudio', title: '೧೪. ಸುತ್ತೋಲೆಗಳು & ಇಲಾಖಾ ಆದೇಶಗಳು', desc: 'ಶೈಕ್ಷಣಿಕ ಸುತ್ತೋಲೆಗಳು, ಸರ್ಕಾರದ ಅಧಿಕೃತ ಆದೇಶಗಳು', icon: Sparkles, tab: 'circularStudio' as AppNavTab, category: 'letters', badge: 'Circulars' },
+    { id: 'rti', title: '೧೫. ಆರ್‌ಟಿಐ ಕಡತಗಳು & ಅರ್ಜಿಗಳು', desc: 'ಮಾಹಿತಿ ಹಕ್ಕು ಉತ್ತರ ಪತ್ರಗಳು, ಕಲಂ ೬(೩) & ಮೇಲ್ಮನವಿ', icon: ShieldCheck, tab: 'rti' as AppNavTab, category: 'schools', badge: 'ಮಾಹಿತಿ ಹಕ್ಕು' },
+    { id: 'reports', title: '೧೬. ಕಛೇರಿ ದೈನಂದಿನ ವರದಿ', desc: 'ದೈನಂದಿನ ಆಡಳಿತಾತ್ಮಕ ಕಡತ ವಿಲೇವಾರಿ ಸಾರಾಂಶ', icon: BarChart3, tab: 'reports' as AppNavTab, category: 'admin', badge: 'ವರದಿ' },
+    { id: 'search', title: '೧೭. ಏಕೀಕೃತ ಶೋಧನೆ', desc: 'ಕಡತಗಳು, ನೌಕರರು, ಆದೇಶಗಳು & ಸುತ್ತೋಲೆಗಳು', icon: Search, tab: 'search' as AppNavTab, category: 'admin', badge: 'Search' },
+    { id: 'settings', title: '೧೮. ಅಡ್ಮಿನ್ & ಕಛೇರಿ ಸೆಟ್ಟಿಂಗ್ಸ್', desc: 'ಕಛೇರಿ ಮಾಹಿತಿ, DDO ಸಹಿ ಕಾನ್ಫಿಗರೇಶನ್ & ನಿಯಮಗಳು', icon: Settings, tab: 'settings' as AppNavTab, category: 'admin', badge: 'DDO Setup' },
+    { id: 'masterAudit', title: '೧೯. ಕಡತಗಳ ಮಾಸ್ಟರ್ ಆಡಿಟ್', desc: 'ಸಿಸ್ಟಮ್ ಆಡಿಟ್ ಲಾಗ್ಸ್, ಪರಿಶೀಲನೆ & ಬ್ಯಾಕಪ್', icon: Clock, tab: 'masterAudit' as AppNavTab, category: 'admin', badge: 'Audit' },
+    { id: 'officialLetter', title: '೨೦. ಅಧಿಕೃತ ಪತ್ರ ಸ್ಟುಡಿಯೋ', desc: 'OCR ಆಧಾರಿತ ಅಧಿಕೃತ ಸರ್ಕಾರಿ ಪತ್ರ ಹಾಗೂ ಆದೇಶಗಳು', icon: FileText, tab: 'officialLetter' as AppNavTab, category: 'letters', badge: 'Official Letter' },
+  ], []);
+
+  const filteredAllMenus = useMemo(() => {
+    return allDashboardMenus.filter(m => {
+      if (menuFilterCategory !== 'all' && m.category !== menuFilterCategory) return false;
+      if (!allMenuSearch.trim()) return true;
+      const q = allMenuSearch.toLowerCase();
+      return m.title.toLowerCase().includes(q) || (m.desc && m.desc.toLowerCase().includes(q));
+    });
+  }, [allDashboardMenus, menuFilterCategory, allMenuSearch]);
 
   const femaleEmployeesCount = useMemo(() => {
     return (employees || []).filter(e => {
@@ -406,6 +444,18 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
               <Users className="w-4 h-4 text-amber-600" />
               <span>ಕಛೇರಿ ಸಿಬ್ಬಂದಿ ಪಟ್ಟಿ (Staff Directory & Table) →</span>
             </button>
+
+            <button
+              id="hero-btn-all-menus"
+              onClick={() => {
+                const el = document.getElementById('home-all-menus-directory-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="px-4 py-3 bg-[#2b2b2b] hover:bg-stone-800 text-[#f59e0b] rounded-xl text-xs font-black border-2 border-[#2b2b2b] shadow-[4px_4px_0px_#f59e0b] hover:shadow-[6px_6px_0px_#f59e0b] transition-all flex items-center gap-2 cursor-pointer font-kannada"
+            >
+              <Layers className="w-4 h-4 text-[#f59e0b]" />
+              <span>ಎಲ್ಲಾ ಮೆನುಗಳ ಡೈರೆಕ್ಟರಿ (All System Menus) →</span>
+            </button>
           </div>
         </div>
 
@@ -440,44 +490,212 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         </div>
       </div>
 
-      {/* 3. PRIMARY 7 ACTION MODULES ON HOME PAGE (ಕಛೇರಿಯ ೭ ಮುಖ್ಯ ನಿರ್ವಹಣಾ ಮಾಡ್ಯೂಲ್‌ಗಳು) */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b-2 border-[#2b2b2b] pb-2">
+      {/* 2.5 ALL SYSTEM MENUS & QUICK NAVIGATION DIRECTORY (ಸಮಗ್ರ ಮೆನುಗಳು & ತ್ವರಿತ ನ್ಯಾವಿಗೇಷನ್ ಡೈರೆಕ್ಟರಿ) */}
+      <div id="home-all-menus-directory-section" className="space-y-4 pt-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-2 border-[#2b2b2b] pb-2">
           <div className="flex items-center gap-2">
-            <span className="label-ink">SEVEN CORE MODULES</span>
+            <span className="label-ink font-bold">ALL MENUS ({allDashboardMenus.length})</span>
             <h2 className="font-gaegu text-3xl sm:text-4xl font-black text-[#2b2b2b] tracking-tight">
-              ಮುಖಪುಟದ ೭ ಮುಖ್ಯ ನಿರ್ವಹಣಾ ಮಾಡ್ಯೂಲ್‌ಗಳು
+              ಸಮಗ್ರ ಮೆನುಗಳು & ತ್ವರಿತ ನ್ಯಾವಿಗೇಷನ್ ಡೈರೆಕ್ಟರಿ
             </h2>
           </div>
           <span className="text-xs font-bold text-[#2b2b2b] bg-amber-100 px-3 py-1 rounded-full border-2 border-[#2b2b2b] font-kannada">
-            ಶಾಖೆ: ಆ2 (ಸ.ಪ್ರಾ.ಶಿ) ಮಾತ್ರ
+            ಒಟ್ಟು {allDashboardMenus.length} ಸಿಸ್ಟಮ್ ಮಾಡ್ಯೂಲ್‌ಗಳು ಲಭ್ಯ
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {/* Module 1: ಸಾಮಾನ್ಯ ಪತ್ರ ತಯಾರಿಸಿ (General Letter Studio) */}
+        {/* Search & Category Filter Controls */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-stone-50 p-3 rounded-xl border-2 border-[#2b2b2b] shadow-[3px_3px_0px_#2b2b2b]">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setMenuFilterCategory('all')}
+              className={`px-3 py-1 text-xs font-bold rounded-lg border-2 transition-all font-kannada cursor-pointer ${
+                menuFilterCategory === 'all'
+                  ? 'bg-[#2b2b2b] text-white border-[#2b2b2b]'
+                  : 'bg-white text-stone-700 border-stone-300 hover:border-[#2b2b2b]'
+              }`}
+            >
+              ಎಲ್ಲಾ ಮೆನುಗಳು ({allDashboardMenus.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setMenuFilterCategory('files')}
+              className={`px-3 py-1 text-xs font-bold rounded-lg border-2 transition-all font-kannada cursor-pointer ${
+                menuFilterCategory === 'files'
+                  ? 'bg-[#f59e0b] text-[#2b2b2b] border-[#2b2b2b]'
+                  : 'bg-white text-stone-700 border-stone-300 hover:border-[#2b2b2b]'
+              }`}
+            >
+              📁 ಕಡತಗಳು ({allDashboardMenus.filter(m => m.category === 'files').length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setMenuFilterCategory('letters')}
+              className={`px-3 py-1 text-xs font-bold rounded-lg border-2 transition-all font-kannada cursor-pointer ${
+                menuFilterCategory === 'letters'
+                  ? 'bg-[#f97316] text-white border-[#2b2b2b]'
+                  : 'bg-white text-stone-700 border-stone-300 hover:border-[#2b2b2b]'
+              }`}
+            >
+              ✉️ ಪತ್ರ & ಆದೇಶಗಳು ({allDashboardMenus.filter(m => m.category === 'letters').length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setMenuFilterCategory('salary')}
+              className={`px-3 py-1 text-xs font-bold rounded-lg border-2 transition-all font-kannada cursor-pointer ${
+                menuFilterCategory === 'salary'
+                  ? 'bg-[#10b981] text-white border-[#2b2b2b]'
+                  : 'bg-white text-stone-700 border-stone-300 hover:border-[#2b2b2b]'
+              }`}
+            >
+              💰 ವೇತನ & ನೌಕರರು ({allDashboardMenus.filter(m => m.category === 'salary').length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setMenuFilterCategory('schools')}
+              className={`px-3 py-1 text-xs font-bold rounded-lg border-2 transition-all font-kannada cursor-pointer ${
+                menuFilterCategory === 'schools'
+                  ? 'bg-[#0284c7] text-white border-[#2b2b2b]'
+                  : 'bg-white text-stone-700 border-stone-300 hover:border-[#2b2b2b]'
+              }`}
+            >
+              🏫 ಶಾಲೆಗಳು & RTI ({allDashboardMenus.filter(m => m.category === 'schools').length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setMenuFilterCategory('admin')}
+              className={`px-3 py-1 text-xs font-bold rounded-lg border-2 transition-all font-kannada cursor-pointer ${
+                menuFilterCategory === 'admin'
+                  ? 'bg-[#44403c] text-white border-[#2b2b2b]'
+                  : 'bg-white text-stone-700 border-stone-300 hover:border-[#2b2b2b]'
+              }`}
+            >
+              ⚙️ ಆಡಳಿತ & ವರದಿ ({allDashboardMenus.filter(m => m.category === 'admin').length})
+            </button>
+          </div>
+
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 text-stone-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={allMenuSearch}
+              onChange={(e) => setAllMenuSearch(e.target.value)}
+              placeholder="ಮೆನು ಹುಡುಕಿ (Search Menu)..."
+              className="w-full pl-8 pr-3 py-1.5 text-xs border-2 border-[#2b2b2b] rounded-lg bg-white placeholder-stone-400 font-kannada"
+            />
+          </div>
+        </div>
+
+        {/* All Menus Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          {filteredAllMenus.map((menu) => {
+            const IconComp = menu.icon;
+            return (
+              <div
+                key={menu.id}
+                className="bg-white p-3.5 rounded-xl border-2 border-[#2b2b2b] shadow-[3px_3px_0px_#2b2b2b] hover:shadow-[5px_5px_0px_#f59e0b] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="p-2 rounded-lg bg-stone-100 text-[#2b2b2b] border border-[#2b2b2b]">
+                      <IconComp className="w-4 h-4" />
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-[#2b2b2b] font-mono-code border border-[#2b2b2b]">
+                      {menu.badge}
+                    </span>
+                  </div>
+                  <h4 className="font-bold text-sm text-[#2b2b2b] font-kannada leading-snug">
+                    {menu.title}
+                  </h4>
+                  <p className="text-[11px] text-stone-600 font-kannada mt-1 leading-relaxed">
+                    {menu.desc}
+                  </p>
+                </div>
+                <div className="mt-3 pt-2.5 border-t border-stone-200">
+                  <button
+                    type="button"
+                    onClick={() => navigateTo(menu.tab)}
+                    className="w-full py-1.5 px-2.5 bg-stone-100 hover:bg-[#2b2b2b] text-[#2b2b2b] hover:text-[#f59e0b] text-xs font-bold rounded-lg flex items-center justify-between transition-colors border border-[#2b2b2b] cursor-pointer font-kannada"
+                  >
+                    <span>ಮೆನು ತೆರೆಯಿರಿ</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 3. PRIMARY 18 ACTION MODULES ON HOME PAGE (ಮುಖಪುಟದ ೧೮ ನಿರ್ವಹಣಾ ಮಾಡ್ಯೂಲ್‌ಗಳು) */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b-2 border-[#2b2b2b] pb-2">
+          <div className="flex items-center gap-2">
+            <span className="label-ink font-bold">18 CORE MODULES</span>
+            <h2 className="font-gaegu text-3xl sm:text-4xl font-black text-[#2b2b2b] tracking-tight">
+              ಮುಖಪುಟದ ೧೮ ನಿರ್ವಹಣಾ ಮಾಡ್ಯೂಲ್‌ಗಳು
+            </h2>
+          </div>
+          <span className="text-xs font-bold text-[#2b2b2b] bg-amber-100 px-3 py-1 rounded-full border-2 border-[#2b2b2b] font-kannada">
+            ಸಕ್ರಿಯ ಶಾಖೆ: ಆ2 (ಸ.ಪ್ರಾ.ಶಿ) • ಅಧಿಕೃತ ತಂತ್ರಾಂಶ
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
+          {/* Module 1: ಕಡತಗಳ ಡ್ಯಾಶ್ ಬೋರ್ಡ್ (File Dashboard) */}
           <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#f59e0b] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
             <div>
               <div className="flex items-center justify-between">
                 <span className="p-2.5 rounded-lg bg-amber-100 text-amber-900 border-2 border-[#2b2b2b]">
-                  <FileText className="w-5 h-5 text-[#2b2b2b]" />
+                  <FolderGit2 className="w-5 h-5 text-[#2b2b2b]" />
                 </span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#f59e0b] text-[#2b2b2b] font-mono-code border border-[#2b2b2b]">
-                  ೧. ಸಾಮಾನ್ಯ ಪತ್ರ
+                  ೧. ಕಡತಗಳ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್
                 </span>
               </div>
-              <h3 className="font-gaegu text-3xl font-bold text-amber-700 mt-2">
-                ೧. ಸಾಮಾನ್ಯ ಪತ್ರ ತಯಾರಿಸಿ
+              <h3 className="font-gaegu text-3xl font-bold text-amber-800 mt-2">
+                ೧. ಕಡತಗಳ ಡ್ಯಾಶ್ ಬೋರ್ಡ್
               </h3>
               <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
-                ನೌಕರರ ಹಾಗೂ ಇಲಾಖಾ ಸಾಮಾನ್ಯ ಪತ್ರ, ನಡಾವಳಿಗಳನ್ನು ಸರಳವಾಗಿ ಸಿದ್ಧಪಡಿಸಿ, ಮುದ್ರಿಸಿ ಹಾಗೂ PDF ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ.
+                ಕಡತಗಳ ಚಲನವಲನ ಟೈಮ್‌ಲೈನ್, KSMOP ವರ್ಗೀಕರಣ, ಕಡತ ಶೋಧನೆ ಹಾಗೂ ಪರಿಶೀಲನೆ.
               </p>
             </div>
             <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
               <button
-                id="home-module-1-general-letter"
-                onClick={() => navigateTo('generalLetter')}
+                id="home-module-1-file-dashboard"
+                onClick={() => navigateTo('fileDashboard')}
                 className="w-full py-2 px-3 bg-[#f59e0b] hover:bg-amber-400 text-[#2b2b2b] text-xs font-black rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#2b2b2b] font-kannada"
+              >
+                <span>ಕಡತಗಳ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್ ತೆರೆಯಿರಿ</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Module 2: ಸಾಮಾನ್ಯ ಕಡತ / ಸಾಮಾನ್ಯ ಪತ್ರ (General File Studio) */}
+          <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#f97316] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="p-2.5 rounded-lg bg-orange-100 text-orange-950 border-2 border-[#2b2b2b]">
+                  <FileText className="w-5 h-5 text-orange-800" />
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#f97316] text-white font-mono-code border border-[#2b2b2b]">
+                  ೨. ಸಾಮಾನ್ಯ ಕಡತ
+                </span>
+              </div>
+              <h3 className="font-gaegu text-3xl font-bold text-orange-800 mt-2">
+                ೨. ಸಾಮಾನ್ಯ ಕಡತ (ಪತ್ರ ತಯಾರಿಸಿ)
+              </h3>
+              <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
+                ನೌಕರರ ಹಾಗೂ ಇಲಾಖಾ ಸಾಮಾನ್ಯ ಪತ್ರ, ನಡಾವಳಿಗಳನ್ನು ಸರಳವಾಗಿ ಸಿದ್ಧಪಡಿಸಿ ಕಡತಕ್ಕೆ ಲಗತ್ತಿಸಿ.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
+              <button
+                id="home-module-2-general-letter"
+                onClick={() => navigateTo('generalLetter')}
+                className="w-full py-2 px-3 bg-[#f97316] hover:bg-orange-600 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#2b2b2b] font-kannada"
               >
                 <span>ಸಾಮಾನ್ಯ ಪತ್ರ ತಯಾರಿಸಿ</span>
                 <ChevronRight className="w-4 h-4" />
@@ -485,7 +703,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             </div>
           </div>
 
-          {/* Module 2: ಜ್ಞಾಪನಾ ಆದೇಶ (Memorandum Order Studio) */}
+          {/* Module 3: ಜ್ಞಾಪನಾದೇಶ (Memorandum Order Studio) */}
           <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#10b981] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
             <div>
               <div className="flex items-center justify-between">
@@ -493,11 +711,11 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                   <Award className="w-5 h-5 text-emerald-800" />
                 </span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#10b981] text-white font-mono-code border border-[#2b2b2b]">
-                  ೨. ಜ್ಞಾಪನಾ ಆದೇಶ
+                  ೩. ಜ್ಞಾಪನಾದೇಶ
                 </span>
               </div>
               <h3 className="font-gaegu text-3xl font-bold text-emerald-700 mt-2">
-                ೨. ಜ್ಞಾಪನಾ ಆದೇಶ
+                ೩. ಜ್ಞಾಪನಾದೇಶ
               </h3>
               <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
                 ಗಳಿಕೆ ರಜೆ, ಶಿಶುಪಾಲನ ರಜೆ, ಸೇವಾ ಸಕ್ರಮ ಹಾಗೂ ವರ್ಗಾವಣೆ ಅಧಿಕೃತ ಜ್ಞಾಪನಾ ಕಛೇರಿ ಆದೇಶಗಳು.
@@ -505,7 +723,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             </div>
             <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
               <button
-                id="home-module-2-memorandum"
+                id="home-module-3-memorandum"
                 onClick={() => navigateTo('memorandum')}
                 className="w-full py-2 px-3 bg-[#2b2b2b] hover:bg-stone-800 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
               >
@@ -515,31 +733,27 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             </div>
           </div>
 
-          {/* Module 3: ಪ್ರಪತ್ರ-೨೮ [ವೇತನ ಬಡ್ತಿ] (Prapathra 28 - Annual Increment) */}
-          <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#f97316] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
+          {/* Module 4: ಪತ್ರ 28 (ಪ್ರಪತ್ರ-೨೮ - ವೇತನ ಬಡ್ತಿ) */}
+          <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#f59e0b] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
             <div>
               <div className="flex items-center justify-between">
-                <span className="p-2.5 rounded-lg bg-orange-100 text-orange-950 border-2 border-[#2b2b2b]">
-                  <FileSpreadsheet className="w-5 h-5 text-orange-700" />
+                <span className="p-2.5 rounded-lg bg-amber-100 text-amber-950 border-2 border-[#2b2b2b]">
+                  <FileSpreadsheet className="w-5 h-5 text-amber-800" />
                 </span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#2b2b2b] text-[#fffbf2] font-mono-code border border-[#2b2b2b]">
-                  ೩. ಪ್ರಪತ್ರ-೨೮
+                  ೪. ಪತ್ರ ೨೮
                 </span>
               </div>
-              <h3 className="font-gaegu text-3xl font-bold text-orange-700 mt-2">
-                ೩. ಪ್ರಪತ್ರ-೨೮ [ವೇತನ ಬಡ್ತಿ]
+              <h3 className="font-gaegu text-3xl font-bold text-amber-800 mt-2">
+                ೪. ಪತ್ರ ೨೮ (ಪ್ರಪತ್ರ-೨೮)
               </h3>
               <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
                 ಜನವರಿ ಹಾಗೂ ಜುಲೈ ಮಾಹೆಯ ವಾರ್ಷಿಕ ವೇತನ ಬಡ್ತಿ ಪ್ರಪತ್ರ-೨೮ ಪಟ್ಟಿ, ನಡಾವಳಿ & ಆದೇಶ.
               </p>
-
-              {/* Quick Month Selectors */}
               <div className="grid grid-cols-2 gap-1.5 mt-2.5">
                 <button
-                  id="home-btn-prapathra-january"
                   onClick={() => openPrapathraMonth('January')}
                   className="py-1 px-2 bg-white hover:bg-amber-100 border-2 border-[#2b2b2b] text-[#2b2b2b] rounded text-[11px] font-bold flex items-center justify-between cursor-pointer font-kannada"
-                  title="ಜನವರಿ ಮಾಹೆಯ ವೇತನ ಬಡ್ತಿ ಹೊಂದಿರುವ ನೌಕರರನ್ನು ನೋಡಿ"
                 >
                   <span>📅 ಜನವರಿ</span>
                   <span className="bg-[#f59e0b] text-[#2b2b2b] px-1 rounded text-[10px] font-mono-code font-bold">
@@ -547,10 +761,8 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                   </span>
                 </button>
                 <button
-                  id="home-btn-prapathra-july"
                   onClick={() => openPrapathraMonth('July')}
                   className="py-1 px-2 bg-white hover:bg-amber-100 border-2 border-[#2b2b2b] text-[#2b2b2b] rounded text-[11px] font-bold flex items-center justify-between cursor-pointer font-kannada"
-                  title="ಜುಲೈ ಮಾಹೆಯ ವೇತನ ಬಡ್ತಿ ಹೊಂದಿರುವ ನೌಕರರನ್ನು ನೋಡಿ"
                 >
                   <span>📅 ಜುಲೈ</span>
                   <span className="bg-[#f59e0b] text-[#2b2b2b] px-1 rounded text-[10px] font-mono-code font-bold">
@@ -561,7 +773,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             </div>
             <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
               <button
-                id="home-module-3-prapathra28"
+                id="home-module-4-prapathra28"
                 onClick={() => navigateTo('prapathra28')}
                 className="w-full py-2 px-3 bg-[#f59e0b] hover:bg-amber-400 text-[#2b2b2b] text-xs font-black rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#2b2b2b] font-kannada"
               >
@@ -571,7 +783,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             </div>
           </div>
 
-          {/* Module 4: ನೌಕರರ ಮಾಹಿತಿ (Employee Information Roster) */}
+          {/* Module 5: ನೌಕರರ ಮಾಹಿತಿ (Employee Information) */}
           <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#0284c7] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
             <div>
               <div className="flex items-center justify-between">
@@ -579,89 +791,131 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                   <Users className="w-5 h-5 text-sky-700" />
                 </span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#2b2b2b] text-[#fffbf2] font-mono-code border border-[#2b2b2b]">
-                  ೪. ನೌಕರರ ಮಾಹಿತಿ
+                  ೫. ನೌಕರರ ಮಾಹಿತಿ
                 </span>
               </div>
               <h3 className="font-gaegu text-3xl font-bold text-sky-700 mt-2">
-                ೪. ನೌಕರರ ಮಾಹಿತಿ
+                ೫. ನೌಕರರ ಮಾಹಿತಿ
               </h3>
               <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
-                CSV ಕಡತದ ೭೮ ಸಿಬ್ಬಂದಿಯ KGID, ಹುದ್ದೆ, ವೇತನ ಶ್ರೇಣಿ, ಶಾಲೆ ಹಾಗೂ ಸೇವಾ ವಿವರಗಳು.
+                ಕಛೇರಿ ಹಾಗೂ ಶಾಲಾ ಸಿಬ್ಬಂದಿಯ KGID, ಹುದ್ದೆ, ವೇತನ ಶ್ರೇಣಿ, ಶಾಲೆ ಹಾಗೂ ಸೇವಾ ವಿವರಗಳ ತಂತ್ರಾಂಶ.
               </p>
             </div>
-            <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15 space-y-2">
+            <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
               <button
-                id="home-module-4-employees"
+                id="home-module-5-employees"
                 onClick={() => navigateTo('employees')}
-                className="w-full py-1.5 px-3 bg-[#2b2b2b] hover:bg-stone-800 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
+                className="w-full py-2 px-3 bg-[#2b2b2b] hover:bg-stone-800 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
               >
                 <span>ನೌಕರರ ಮಾಹಿತಿ ವೀಕ್ಷಿಸಿ</span>
                 <ChevronRight className="w-4 h-4 text-sky-400" />
               </button>
+            </div>
+          </div>
+
+          {/* Module 6: ರಜ ಕ್ಯಾಲೆಂಡರ್ (Leave Calendar) */}
+          <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#e11d48] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="p-2.5 rounded-lg bg-rose-100 text-rose-950 border-2 border-[#2b2b2b]">
+                  <Calendar className="w-5 h-5 text-rose-700" />
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#e11d48] text-white font-mono-code border border-[#2b2b2b]">
+                  ೬. ರಜ ಕ್ಯಾಲೆಂಡರ್
+                </span>
+              </div>
+              <h3 className="font-gaegu text-3xl font-bold text-rose-700 mt-2">
+                ೬. ರಜ ಕ್ಯಾಲೆಂಡರ್
+              </h3>
+              <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
+                ಗಳಿಕೆ ರಜೆ (EL), ಅರೆ ವೇತನ ರಜೆ (HPL) ಹಾಗೂ ಮಹಿಳಾ ನೌಕರರ 180 ದಿನಗಳ ರಜೆ ಕೋಟಾ ನಿರ್ವಹಣೆ.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
               <button
-                id="home-module-4-leave-calendar"
+                id="home-module-6-leave-calendar"
                 onClick={() => navigateTo('leaveCalendar')}
-                className="w-full py-1.5 px-3 bg-rose-50 hover:bg-rose-100 text-rose-950 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-rose-300 font-kannada"
-                title="ಮಹಿಳಾ ನೌಕರರ ಶಿಶುಪಾಲನ ರಜೆ (180 ದಿನಗಳು) & ರಜೆ ಕ್ಯಾಲೆಂಡರ್"
+                className="w-full py-2 px-3 bg-[#e11d48] hover:bg-rose-700 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
               >
-                <Calendar className="w-3.5 h-3.5 text-rose-600" />
-                <span>📅 ರಜೆ ಕ್ಯಾಲೆಂಡರ್ (180 ದಿನಗಳು)</span>
+                <span>ರಜ ಕ್ಯಾಲೆಂಡರ್ ತೆರೆಯಿರಿ</span>
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* Module 5: ಆದೇಶಗಳ ಕಡತ (Order Files / Dockets) */}
+          {/* Module 7: ಪಿಂಚಣಿ (Pension Studio) */}
+          <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#d97706] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="p-2.5 rounded-lg bg-amber-200 text-amber-950 border-2 border-[#2b2b2b]">
+                  <Award className="w-5 h-5 text-amber-800" />
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#d97706] text-white font-mono-code border border-[#2b2b2b]">
+                  ೭. ಪಿಂಚಣಿ
+                </span>
+              </div>
+              <h3 className="font-gaegu text-3xl font-bold text-amber-800 mt-2">
+                ೭. ಪಿಂಚಣಿ & ನಿವೃತ್ತಿ
+              </h3>
+              <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
+                KCSR ನಿವೃತ್ತಿ ವೇತನ ಲೆಕ್ಕಾಚಾರ, ನಮೂನೆ-೭, DCRG, ಪಿಂಚಣಿ ಪರಿವರ್ತನೆ & ಆದೇಶಗಳು.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
+              <button
+                id="home-module-7-pension"
+                onClick={() => navigateTo('pension')}
+                className="w-full py-2 px-3 bg-[#d97706] hover:bg-amber-600 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
+              >
+                <span>ಪಿಂಚಣಿ ತಂತ್ರಾಂಶ ತೆರೆಯಿರಿ</span>
+                <ChevronRight className="w-4 h-4 text-amber-200" />
+              </button>
+            </div>
+          </div>
+
+          {/* Module 8: ಆದೇಶ ಕಡತ (Order Files) */}
           <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#9333ea] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
             <div>
               <div className="flex items-center justify-between">
                 <span className="p-2.5 rounded-lg bg-purple-100 text-purple-950 border-2 border-[#2b2b2b]">
                   <Archive className="w-5 h-5 text-purple-700" />
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#2b2b2b] text-[#fffbf2] font-mono-code border border-[#2b2b2b]">
-                  ೫. ಆದೇಶಗಳ ಕಡತ
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#9333ea] text-white font-mono-code border border-[#2b2b2b]">
+                  ೮. ಆದೇಶ ಕಡತ
                 </span>
               </div>
               <h3 className="font-gaegu text-3xl font-bold text-purple-700 mt-2">
-                ೫. ಆದೇಶಗಳ ಕಡತ
+                ೮. ಆದೇಶ ಕಡತ (ದಾಖಲೆಗಳು)
               </h3>
               <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
-                ಹೊರಡಿಸಲಾದ ಜ್ಞಾಪನಾ ಆದೇಶಗಳ ಕಡತಗಳು (Dockets), KSMOP ವರ್ಗೀಕರಣ & ಕಡತ ಪರಿಶೀಲನೆ.
+                ಹೊರಡಿಸಲಾದ ಎಲ್ಲಾ ಅಧಿಕೃತ ಜ್ಞಾಪನಾ ಆದೇಶಗಳ ಕಡತಗಳು (Dockets), KSMOP ವರ್ಗೀಕರಣ.
               </p>
             </div>
-            <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15 space-y-2">
+            <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
               <button
-                id="home-module-5-file-dashboard"
-                onClick={() => navigateTo('fileDashboard')}
-                className="w-full py-2 px-3 bg-[#f59e0b] hover:bg-amber-400 text-[#2b2b2b] text-xs font-black rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#2b2b2b] font-kannada"
-                title="ಪಿಂಚಣಿ, ಬಡ್ತಿ, ಶಿಸ್ತು ಕ್ರಮ ಕಡತಗಳ ಚಲನವಲನ ಟೈಮ್‌ಲೈನ್"
-              >
-                <span>📁 ಕಡತಗಳ ಚಲನವಲನ (File Timeline)</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-              <button
-                id="home-module-5-order-files"
+                id="home-module-8-order-files"
                 onClick={() => navigateTo('orderFiles')}
-                className="w-full py-1.5 px-3 bg-[#2b2b2b] hover:bg-stone-800 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
+                className="w-full py-2 px-3 bg-[#9333ea] hover:bg-purple-700 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
               >
                 <span>ಆದೇಶಗಳ ಕಡತ ತೆರೆಯಿರಿ</span>
-                <ChevronRight className="w-4 h-4 text-purple-400" />
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* Module 6: ವೇತನ ಬದಲಾವಣೆ (Salary Changes) */}
+          {/* Module 9: ವೇತನ ಬದಲಾವಣೆ (Salary Changes) */}
           <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#0d9488] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
             <div>
               <div className="flex items-center justify-between">
                 <span className="p-2.5 rounded-lg bg-teal-100 text-teal-950 border-2 border-[#2b2b2b]">
                   <TrendingUp className="w-5 h-5 text-teal-700" />
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#2b2b2b] text-[#fffbf2] font-mono-code border border-[#2b2b2b]">
-                  ೬. ವೇತನ ಬದಲಾವಣೆ
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#0d9488] text-white font-mono-code border border-[#2b2b2b]">
+                  ೯. ವೇತನ ಬದಲಾವಣೆ
                 </span>
               </div>
               <h3 className="font-gaegu text-3xl font-bold text-teal-700 mt-2">
-                ೬. ವೇತನ ಬದಲಾವಣೆ
+                ೯. ವೇತನ ಬದಲಾವಣೆ
               </h3>
               <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
                 KCSR ನಿಯಮ 52/53 ವೇತನ ಬದಲಾವಣೆ, 10/15/20/25/30 ವರ್ಷಗಳ ಹೆಚ್ಚುವರಿ ವೇತನ ಬಡ್ತಿ.
@@ -669,29 +923,29 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             </div>
             <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
               <button
-                id="home-module-6-salary-changes"
+                id="home-module-9-salary-changes"
                 onClick={() => navigateTo('salaryChanges')}
-                className="w-full py-2 px-3 bg-[#2b2b2b] hover:bg-stone-800 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
+                className="w-full py-2 px-3 bg-[#0d9488] hover:bg-teal-700 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
               >
                 <span>ವೇತನ ಬದಲಾವಣೆ ನಿರ್ವಹಣೆ</span>
-                <ChevronRight className="w-4 h-4 text-teal-400" />
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* Module 7: ವರದಿಗಳು (Reports & Audits) */}
+          {/* Module 10: ವರದಿಗಳು (Reports) */}
           <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#2563eb] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
             <div>
               <div className="flex items-center justify-between">
                 <span className="p-2.5 rounded-lg bg-blue-100 text-blue-950 border-2 border-[#2b2b2b]">
                   <BarChart3 className="w-5 h-5 text-blue-700" />
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#2b2b2b] text-[#fffbf2] font-mono-code border border-[#2b2b2b]">
-                  ೭. ವರದಿಗಳು
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#2563eb] text-white font-mono-code border border-[#2b2b2b]">
+                  ೧೦. ವರದಿಗಳು
                 </span>
               </div>
               <h3 className="font-gaegu text-3xl font-bold text-blue-700 mt-2">
-                ೭. ವರದಿಗಳು
+                ೧೦. ವರದಿಗಳು
               </h3>
               <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
                 ವೇತನ ಬಡ್ತಿ, ರಜೆ, ಜ್ಞಾಪನೆ ಹಾಗೂ ನೌಕರರ ಸೇವಾ ಅಂಕಿ-ಅಂಶಗಳ ಸಮಗ್ರ ವರದಿಗಳು & ಮುದ್ರಣ.
@@ -699,42 +953,252 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             </div>
             <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
               <button
-                id="home-module-7-reports"
+                id="home-module-10-reports"
                 onClick={() => navigateTo('reports')}
-                className="w-full py-2 px-3 bg-[#2b2b2b] hover:bg-stone-800 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
+                className="w-full py-2 px-3 bg-[#2563eb] hover:bg-blue-700 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
               >
-                <span>ವರದಿಗಳು & ಲೆಕ್ಕಪರಿಶೋಧನೆ</span>
-                <ChevronRight className="w-4 h-4 text-blue-400" />
+                <span>ವರದಿಗಳು ವೀಕ್ಷಿಸಿ</span>
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* Module 8: ಪಿಂಚಣಿ & ನಿವೃತ್ತಿ ನಿರ್ವಹಣೆ (Pension & Retirement Benefits) */}
-          <div className="mini-card bg-amber-50/50 flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#d97706] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
+          {/* Module 11: ಹುಡುಕಾಟ (Unified Search) */}
+          <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#4f46e5] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
             <div>
               <div className="flex items-center justify-between">
-                <span className="p-2.5 rounded-lg bg-amber-200 text-amber-950 border-2 border-[#2b2b2b]">
-                  <Award className="w-5 h-5 text-amber-800" />
+                <span className="p-2.5 rounded-lg bg-indigo-100 text-indigo-950 border-2 border-[#2b2b2b]">
+                  <Search className="w-5 h-5 text-indigo-700" />
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#d97706] text-white font-mono-code border border-[#2b2b2b]">
-                  ೮. ಪಿಂಚಣಿ & ನಿವೃತ್ತಿ
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#4f46e5] text-white font-mono-code border border-[#2b2b2b]">
+                  ೧೧. ಹುಡುಕಾಟ
                 </span>
               </div>
-              <h3 className="font-gaegu text-3xl font-bold text-amber-800 mt-2">
-                ೮. ಪಿಂಚಣಿ & ನಿವೃತ್ತಿ
+              <h3 className="font-gaegu text-3xl font-bold text-indigo-700 mt-2">
+                ೧೧. ಹುಡುಕಾಟ
               </h3>
               <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
-                KCSR ನಿವೃತ್ತಿ ವೇತನ ಲೆಕ್ಕಾಚಾರ, ನಮೂನೆ-೭, DCRG, ಪಿಂಚಣಿ ಪರಿವರ್ತನೆ, ಆದೇಶಗಳು & ಕಡತ ನಿರ್ವಹಣೆ.
+                KGID, ಹೆಸರು, ಕಡತ ಸಂಖ್ಯೆ, ಆದೇಶ ಸಂಖ್ಯೆ ಅಥವಾ ಶಾಲೆಯ ಮೂಲಕ ತ್ವರಿತ ಶೋಧನೆ.
               </p>
             </div>
             <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
               <button
-                id="home-module-8-pension"
-                onClick={() => navigateTo('pension')}
-                className="w-full py-2 px-3 bg-[#d97706] hover:bg-amber-600 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
+                id="home-module-11-search"
+                onClick={() => navigateTo('search')}
+                className="w-full py-2 px-3 bg-[#4f46e5] hover:bg-indigo-700 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
               >
-                <span>ಪಿಂಚಣಿ ತಂತ್ರಾಂಶ ತೆರೆಯಿರಿ</span>
-                <ChevronRight className="w-4 h-4 text-amber-200" />
+                <span>ಏಕೀಕೃತ ಹುಡುಕಾಟ</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Module 12: ಸೆಟ್ಟಿಂಗ್ಸ್ (Settings & DDO Management) */}
+          <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#44403c] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="p-2.5 rounded-lg bg-stone-200 text-stone-900 border-2 border-[#2b2b2b]">
+                  <Settings className="w-5 h-5 text-stone-800" />
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#44403c] text-white font-mono-code border border-[#2b2b2b]">
+                  ೧೨. ಸೆಟ್ಟಿಂಗ್ಸ್
+                </span>
+              </div>
+              <h3 className="font-gaegu text-3xl font-bold text-stone-800 mt-2">
+                ೧೨. ಸೆಟ್ಟಿಂಗ್ಸ್
+              </h3>
+              <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
+                ಕಛೇರಿಯ ಡಿಡಿಓ (ಆಹರಣ & ವಿತರಣಾಧಿಕಾರಿ) ಮಾಹಿತಿ, ಸಕ್ಷಮ ಪ್ರಾಧಿಕಾರ ಹಾಗೂ ನಿಯಮಗಳ ಸಂರಚನೆ.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
+              <button
+                id="home-module-12-settings"
+                onClick={() => navigateTo('settings')}
+                className="w-full py-2 px-3 bg-[#44403c] hover:bg-stone-700 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
+              >
+                <span>ಡಿಡಿಓ & ಸೆಟ್ಟಿಂಗ್ಸ್ ತೆರೆಯಿರಿ</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Module 13: ಶಾಲೆಗಳು (Schools Management) */}
+          <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#059669] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="p-2.5 rounded-lg bg-emerald-100 text-emerald-950 border-2 border-[#2b2b2b]">
+                  <School className="w-5 h-5 text-emerald-800" />
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#059669] text-white font-mono-code border border-[#2b2b2b]">
+                  ೧೩. ಶಾಲೆಗಳು
+                </span>
+              </div>
+              <h3 className="font-gaegu text-3xl font-bold text-emerald-800 mt-2">
+                ೧೩. ಶಾಲೆಗಳು & ಅನುದಾನ
+              </h3>
+              <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
+                ಸರ್ಕಾರಿ & ಅನುದಾನಿತ ಶಾಲೆಗಳ ಡೈರೆಕ್ಟರಿ, UDISE ವಿವರ, ಮಾನ್ಯತೆ ನವೀಕರಣ & ಅನುದಾನ ಪತ್ರಗಳು.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
+              <button
+                id="home-module-13-schools"
+                onClick={() => navigateTo('schools')}
+                className="w-full py-2 px-3 bg-[#059669] hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
+              >
+                <span>ಶಾಲೆಗಳ ನಿರ್ವಹಣೆ</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Module 14: ಶಾಸನಬದ್ಧ ಸುತ್ತಲೆ (Statutory Circulars) */}
+          <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#4338ca] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="p-2.5 rounded-lg bg-indigo-100 text-indigo-950 border-2 border-[#2b2b2b]">
+                  <Sparkles className="w-5 h-5 text-indigo-700" />
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#4338ca] text-white font-mono-code border border-[#2b2b2b]">
+                  ೧೪. ಶಾಸನಬದ್ಧ ಸುತ್ತಲೆ
+                </span>
+              </div>
+              <h3 className="font-gaegu text-3xl font-bold text-indigo-800 mt-2">
+                ೧೪. ಶಾಸನಬದ್ಧ ಸುತ್ತಲೆ
+              </h3>
+              <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
+                ಸ್ವಯಂಚಾಲಿತ ಶಾಸನಬದ್ಧ ಸುತ್ತೋಲೆಗಳ ರಚನೆ (KCSR, RTE, KSMOP ನಿಯಮಾನುಸಾರ).
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
+              <button
+                id="home-module-14-circulars"
+                onClick={() => navigateTo('circularStudio')}
+                className="w-full py-2 px-3 bg-[#4338ca] hover:bg-indigo-800 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
+              >
+                <span>ಸುತ್ತೋಲೆ ರಚಿಸಿ</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Module 15: ಕಡತ ಆಡಿತ್ (Master Docket Audit) */}
+          <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#9a3412] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="p-2.5 rounded-lg bg-amber-200 text-amber-950 border-2 border-[#2b2b2b]">
+                  <ShieldCheck className="w-5 h-5 text-amber-900" />
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#9a3412] text-white font-mono-code border border-[#2b2b2b]">
+                  ೧೫. ಕಡತ ಆಡಿತ್
+                </span>
+              </div>
+              <h3 className="font-gaegu text-3xl font-bold text-amber-900 mt-2">
+                ೧೫. ಕಡತ ಆಡಿತ್
+              </h3>
+              <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
+                e-Office ಮಾದರಿಯ ಕಡತಗಳ ಪೂರ್ಣ ಲೆಕ್ಕಪರಿಶೋಧನೆ ಹಾಗೂ KSMOP ವಿಂಗಡಣೆ.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
+              <button
+                id="home-module-15-master-audit"
+                onClick={() => navigateTo('masterAudit')}
+                className="w-full py-2 px-3 bg-[#9a3412] hover:bg-amber-950 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
+              >
+                <span>ಕಡತ ಆಡಿಟ್ ನಡೆಸಿ</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Module 16: ಮಾಹಿತಿ ಹಕ್ಕು (RTI Register) */}
+          <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#ca8a04] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="p-2.5 rounded-lg bg-yellow-100 text-yellow-950 border-2 border-[#2b2b2b]">
+                  <FileCheck2 className="w-5 h-5 text-yellow-800" />
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#ca8a04] text-white font-mono-code border border-[#2b2b2b]">
+                  ೧೬. ಮಾಹಿತಿ ಹಕ್ಕು
+                </span>
+              </div>
+              <h3 className="font-gaegu text-3xl font-bold text-yellow-800 mt-2">
+                ೧೬. ಮಾಹಿತಿ ಹಕ್ಕು (RTI)
+              </h3>
+              <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
+                ಮಾಹಿತಿ ಹಕ್ಕು ಅಧಿನಿಯಮ ೨೦೦೫: ಅರ್ಜಿಗಳ ನಮೂದು, ೩೦-ದಿನಗಳ SLA ಗಡುವು & ಕಡತ ರಿಜಿಸ್ಟರ್.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
+              <button
+                id="home-module-16-rti"
+                onClick={() => navigateTo('rti', { subTab: 'register' })}
+                className="w-full py-2 px-3 bg-[#ca8a04] hover:bg-yellow-600 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
+              >
+                <span>ಮಾಹಿತಿ ಹಕ್ಕು ರಿಜಿಸ್ಟರ್</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Module 17: ಪತ್ರಗಳು (Official Letters / Registry) */}
+          <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#0284c7] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="p-2.5 rounded-lg bg-sky-100 text-sky-950 border-2 border-[#2b2b2b]">
+                  <FileText className="w-5 h-5 text-sky-700" />
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#0284c7] text-white font-mono-code border border-[#2b2b2b]">
+                  ೧೭. ಪತ್ರಗಳು
+                </span>
+              </div>
+              <h3 className="font-gaegu text-3xl font-bold text-sky-800 mt-2">
+                ೧೭. ಪತ್ರಗಳು (ಆವಕ & ಜಾವಕ)
+              </h3>
+              <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
+                ಕಛೇರಿಯ ಆವಕ (Inward) & ಜಾವಕ (Outward) ಪತ್ರಗಳ ಸಮಗ್ರ ನೋಂದಣಿ ಹಾಗೂ ರವಾನೆ.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
+              <button
+                id="home-module-17-registry"
+                onClick={() => navigateTo('registry')}
+                className="w-full py-2 px-3 bg-[#0284c7] hover:bg-sky-700 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
+              >
+                <span>ಪತ್ರಗಳ ರಿಜಿಸ್ಟರ್ ತೆರೆಯಿರಿ</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Module 18: ಆರ್‌ಟಿಐ ಪಾತ್ರ ವ್ಯವಹಾರ (RTI Correspondence Studio) */}
+          <div className="mini-card bg-white flex flex-col justify-between group shadow-[5px_5px_0px_#2b2b2b] hover:shadow-[7px_7px_0px_#b45309] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all border-2 border-[#2b2b2b]">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="p-2.5 rounded-lg bg-amber-100 text-amber-950 border-2 border-[#2b2b2b]">
+                  <Scale className="w-5 h-5 text-amber-800" />
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#b45309] text-white font-mono-code border border-[#2b2b2b]">
+                  ೧೮. RTI ಪತ್ರ ವ್ಯವಹಾರ
+                </span>
+              </div>
+              <h3 className="font-gaegu text-3xl font-bold text-amber-900 mt-2">
+                ೧೮. ಆರ್‌ಟಿಐ ಪಾತ್ರ ವ್ಯವಹಾರ
+              </h3>
+              <p className="text-xs text-[#2b2b2b]/80 mt-1 font-kannada leading-relaxed">
+                ಮಾಹಿತಿ ಹಕ್ಕು ಉತ್ತರ ಪತ್ರಗಳು, ಕಲಂ ೬(೩) ವರ್ಗಾವಣೆ, ಶುಲ್ಕ ಬೇಡಿಕೆ & ಮೇಲ್ಮನವಿ ಪತ್ರ ಸ್ಟುಡಿಯೋ.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t-2 border-[#2b2b2b]/15">
+              <button
+                id="home-module-18-rti-correspondence"
+                onClick={() => navigateTo('rti', { subTab: 'letters' })}
+                className="w-full py-2 px-3 bg-[#b45309] hover:bg-amber-800 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-2 border-[#2b2b2b] font-kannada"
+              >
+                <span>RTI ಪತ್ರ ವ್ಯವಹಾರ ಸ್ಟುಡಿಯೋ</span>
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>

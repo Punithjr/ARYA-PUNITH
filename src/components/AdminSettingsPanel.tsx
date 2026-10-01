@@ -37,6 +37,16 @@ export const AdminSettingsPanel: React.FC<AdminSettingsPanelProps> = ({
   // Active settings tab: 'rules' | 'office' | 'backup'
   const [activeTab, setActiveTab] = useState<'rules' | 'office' | 'backup'>('rules');
 
+  // DDO (ಆಹರಣ ಮತ್ತು ವಿತರಣಾಧಿಕಾರಿ) Dedicated Form State
+  const [ddoOfficerName, setDdoOfficerName] = useState('');
+  const [ddoDesignation, setDdoDesignation] = useState('');
+  const [ddoCode, setDdoCode] = useState('14041ED001');
+  const [ddoKgidNumber, setDdoKgidNumber] = useState('');
+  const [ddoMobile, setDdoMobile] = useState('');
+  const [ddoEmail, setDdoEmail] = useState('');
+  const [ddoOfficeName, setDdoOfficeName] = useState('');
+  const [selectedDdoEmpId, setSelectedDdoEmpId] = useState('');
+
   const showMsg = (text: string, type: 'success' | 'error' = 'success') => {
     setFeedbackMsg({ text, type });
     setTimeout(() => setFeedbackMsg(null), 4000);
@@ -57,16 +67,58 @@ export const AdminSettingsPanel: React.FC<AdminSettingsPanelProps> = ({
       }
       if (officeRes.ok) {
         const d = await officeRes.json();
-        setOfficeConfig(d.config || null);
+        const cfg = d.office || d.config || null;
+        setOfficeConfig(cfg);
+        if (cfg) {
+          if (cfg.ddoOfficerName) setDdoOfficerName(cfg.ddoOfficerName);
+          if (cfg.ddoDesignation) setDdoDesignation(cfg.ddoDesignation);
+          if (cfg.ddoCode) setDdoCode(cfg.ddoCode);
+          if (cfg.ddoKgidNumber) setDdoKgidNumber(cfg.ddoKgidNumber);
+          if (cfg.ddoMobile) setDdoMobile(cfg.ddoMobile);
+          if (cfg.ddoEmail) setDdoEmail(cfg.ddoEmail);
+          if (cfg.ddoOfficeName) setDdoOfficeName(cfg.ddoOfficeName);
+        }
       }
       if (empRes.ok) {
         const d = await empRes.json();
-        setEmployees(d.employees || []);
+        const empList: Employee[] = d.employees || [];
+        setEmployees(empList);
+        // Prioritize employee with isDdo explicitly set to true
+        const ddoEmp = empList.find((e: Employee) => e.isDdo === true) || 
+                       empList.find((e: Employee) => e.designation?.toLowerCase().includes('ddo')) || 
+                       empList.find((e: Employee) => e.designation?.includes('ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿ'));
+        if (ddoEmp) {
+          setSelectedDdoEmpId(ddoEmp.id);
+          // Dynamically pull DDO officer info from isDdo employee flag
+          setDdoOfficerName(ddoEmp.fullName);
+          setDdoDesignation(ddoEmp.designation);
+          setDdoKgidNumber(ddoEmp.kgidNumber || '');
+          setDdoMobile(ddoEmp.phone || '');
+          setDdoEmail(ddoEmp.email || '');
+          setDdoCode(ddoEmp.ddoCode || '14041ED001');
+          setDdoOfficeName(ddoEmp.placeOfWork || ddoEmp.officeLocation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ');
+        }
       }
     } catch (err) {
       console.error('Failed to load settings:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSelectDdoFromStaff = (empId: string) => {
+    setSelectedDdoEmpId(empId);
+    if (!empId) return;
+    const emp = employees.find(e => e.id === empId || e.kgidNumber === empId);
+    if (emp) {
+      setDdoOfficerName(emp.fullName);
+      setDdoDesignation(emp.designation);
+      setDdoKgidNumber(emp.kgidNumber || '');
+      setDdoMobile(emp.phone || '');
+      setDdoEmail(emp.email || '');
+      setDdoCode(emp.ddoCode || '14041ED001');
+      setDdoOfficeName(emp.placeOfWork || emp.officeLocation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ');
+      showMsg(`ನೌಕರರ ಪಟ್ಟಿಯಿಂದ "${emp.fullName}" ರವರ ಡಿಡಿಓ ವಿವರಗಳನ್ನು ಆಯ್ಕೆಮಾಡಲಾಗಿದೆ.`);
     }
   };
 
@@ -126,6 +178,14 @@ export const AdminSettingsPanel: React.FC<AdminSettingsPanelProps> = ({
       contactPhone: formData.get('contactPhone') as string,
       orderPrefix: formData.get('orderPrefix') as string,
       kcsrEdition: formData.get('kcsrEdition') as string,
+      ddoOfficerName: (formData.get('ddoOfficerName') as string) || ddoOfficerName,
+      ddoDesignation: (formData.get('ddoDesignation') as string) || ddoDesignation,
+      ddoCode: (formData.get('ddoCode') as string) || ddoCode,
+      ddoKgidNumber: (formData.get('ddoKgidNumber') as string) || ddoKgidNumber,
+      ddoMobile: (formData.get('ddoMobile') as string) || ddoMobile,
+      ddoEmail: (formData.get('ddoEmail') as string) || ddoEmail,
+      ddoOfficeName: (formData.get('ddoOfficeName') as string) || ddoOfficeName,
+      ddoEmployeeId: selectedDdoEmpId,
     };
 
     try {
@@ -141,7 +201,28 @@ export const AdminSettingsPanel: React.FC<AdminSettingsPanelProps> = ({
 
       if (res.ok) {
         setOfficeConfig(updated);
-        showMsg('ಕಛೇರಿ ಹಾಗೂ ಅಧಿಕಾರಿಗಳ ವಿವರಗಳನ್ನು ಯಶಸ್ವಿಯಾಗಿ ನವೀಕರಿಸಲಾಗಿದೆ.');
+        // If an employee was selected as DDO, update their isDdo in employees and clear previous DDOs
+        if (selectedDdoEmpId) {
+          employees.forEach(emp => {
+            if (emp.id === selectedDdoEmpId) {
+              const updatedEmp = { ...emp, isDdo: true, ddoCode: updated.ddoCode };
+              fetch(`/api/employees/${emp.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedEmp),
+              }).catch(err => console.warn('DDO employee sync note:', err));
+            } else if (emp.isDdo) {
+              const updatedEmp = { ...emp, isDdo: false };
+              fetch(`/api/employees/${emp.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedEmp),
+              }).catch(err => console.warn('DDO employee unmark note:', err));
+            }
+          });
+        }
+        showMsg('ಕಛೇರಿ ಹಾಗೂ ಡಿಡಿಓ (DDO) ವಿವರಗಳನ್ನು ಯಶಸ್ವಿಯಾಗಿ ನವೀಕರಿಸಲಾಗಿದೆ.');
+        if (onRefreshData) onRefreshData();
       } else {
         const d = await res.json();
         showMsg(d.error || 'ಉಳಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ', 'error');
@@ -181,7 +262,7 @@ export const AdminSettingsPanel: React.FC<AdminSettingsPanelProps> = ({
       return;
     }
 
-    if (!confirm('ಎಚ್ಚರಿಕೆ: ಎಲ್ಲಾ ಡೇಟಾಬೇಸ್ ವಿವರಗಳು ಕರ್ನಾಟಕ ಸರ್ಕಾರದ ಮೂಲ ಮಾದರಿಗೆ ಮರುಹೊಂದಾಣಿಕೆಯಾಗಲಿದೆ. ಮುಂದುವರಿಯಬೇಕೆ?')) {
+    if (!confirm('ಎಚ್ಚರಿಕೆ: ಎಲ್ಲಾ ಡೇಟಾಬೇಸ್ ವಿವರಗಳು ಕರ್ನಾಟಕ ಸರ್ಕಾರದ ಅಧಿಕೃತ ಡೇಟಾಬೇಸ್‌ಗೆ ಮರುಹೊಂದಾಣಿಕೆಯಾಗಲಿದೆ. ಮುಂದುವರಿಯಬೇಕೆ?')) {
       return;
     }
 
@@ -243,10 +324,10 @@ export const AdminSettingsPanel: React.FC<AdminSettingsPanelProps> = ({
                 type="button"
                 onClick={handleResetDefaults}
                 className="px-3.5 py-2 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded flex items-center gap-1.5 transition-colors cursor-pointer"
-                title="ಮೂಲ ಮಾದರಿ ಡೇಟಾಗೆ ಮರುಹೊಂದಿಸಿ"
+                title="ಅಧಿಕೃತ ಇಲಾಖಾ ಡೇಟಾಗೆ ಮರುಹೊಂದಿಸಿ"
               >
                 <RotateCcw className="w-4 h-4" />
-                <span>ಮೂಲ ಮಾದರಿ ರಿಸೆಟ್</span>
+                <span>ಅಧಿಕೃತ ಡೇಟಾ ರಿಸೆಟ್</span>
               </button>
             )}
           </div>
@@ -413,9 +494,166 @@ export const AdminSettingsPanel: React.FC<AdminSettingsPanelProps> = ({
       {activeTab === 'office' && officeConfig && (
         <div className="space-y-6">
           <form onSubmit={handleSaveOfficeConfig} className="bg-white border border-stone-200 rounded-b-lg p-6 shadow-2xs space-y-4 text-xs">
-          <div className="border-b border-stone-200 pb-3">
+          {/* SECTION A: DDO (ಹಣ ಸೆಳೆಯುವ ಮತ್ತು ವಿತರಣಾಧಿಕಾರಿ) DETAILS & EMPLOYEE SYNC */}
+          <div className="p-4 bg-amber-50/80 border-2 border-[#2b2b2b] rounded-xl space-y-3 shadow-[2px_2px_0px_#2b2b2b]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-300 pb-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded bg-[#2b2b2b] text-[#f59e0b] font-bold font-mono text-[10px]">
+                    DDO SETUP
+                  </span>
+                  <h4 className="font-bold text-sm text-[#2b2b2b] font-kannada">
+                    ಕಛೇರಿಯ ಡಿಡಿಓ ವಿವರಗಳು (Drawing & Disbursing Officer - ಡಿಡಿಓ)
+                  </h4>
+                </div>
+                <p className="text-[11px] text-stone-600 mt-0.5 font-kannada">
+                  ನೌಕರರ ಪಟ್ಟಿಯಲ್ಲಿ 'isDdo' ಗುರುತಿಸಲಾದ ಅಧಿಕಾರಿಯ ವಿವರಗಳು ತಾನಾಗಿಯೇ ಇಲ್ಲಿ ಲಭ್ಯವಾಗಲಿದ್ದು, ಎಲ್ಲಾ ಜ್ಞಾಪನಾ ಆದೇಶಗಳು, ಸಾಮಾನ್ಯ ಪತ್ರಗಳು ಹಾಗೂ ಪ್ರಪತ್ರ-೨೮ ನಮೂನೆಗಳ ಅಧಿಕೃತ ಸಹಿ ಬ್ಲಾಕ್‌ಗೆ (Signatory Block) ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಅನ್ವಯವಾಗುತ್ತವೆ.
+                </p>
+              </div>
+
+              {ddoOfficerName && (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                  <span className="px-2.5 py-1 bg-emerald-100 text-emerald-900 border border-emerald-400 rounded-lg text-[11px] font-bold font-kannada flex items-center gap-1 shadow-xs">
+                    <Check className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>ಸಕ್ರಿಯ ಡಿಡಿಓ: {ddoOfficerName}</span>
+                  </span>
+                  <span className="text-[10px] text-stone-600 bg-white px-2 py-0.5 rounded border border-stone-300 font-mono">
+                    ಪದನಾಮ: {ddoDesignation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Quick Picker from Staff Roster */}
+            <div>
+              <label className="block font-bold text-stone-800 text-[11px] mb-1 font-kannada">
+                ನೌಕರರ ಪಟ್ಟಿಯಿಂದ ಡಿಡಿಓ ಆಯ್ಕೆ ಮಾಡಿ (Select DDO from Employees):
+              </label>
+              <select
+                id="select-ddo-employee"
+                value={selectedDdoEmpId}
+                onChange={(e) => handleSelectDdoFromStaff(e.target.value)}
+                className="w-full sm:w-2/3 px-3 py-1.5 border-2 border-[#2b2b2b] rounded-lg bg-white font-medium text-xs shadow-xs cursor-pointer font-kannada"
+              >
+                <option value="">-- ನೌಕರರ ಪಟ್ಟಿಯಿಂದ ನೇರವಾಗಿ ಡಿಡಿಓ ಆಯ್ಕೆ ಮಾಡಿ --</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.fullName} - {emp.designation} (KGID: {emp.kgidNumber || '-'}) {emp.isDdo ? '⭐ [ಹಾಲಿ ಡಿಡಿಓ]' : ''}
+                  </option>
+                ))}
+              </select>
+              <span className="text-[10px] text-stone-500 block mt-0.5">
+                ನೌಕರರನ್ನು ಆಯ್ಕೆ ಮಾಡಿದಾಗ ಅವರ ಹೆಸರು, ಪದನಾಮ, ಕೆಜಿಐಡಿ ಮತ್ತು ಸಂಪರ್ಕ ಸಂಖ್ಯೆಗಳು ತಾನಾಗಿಯೇ ಕೆಳಗಿನ ಕಾಲಮ್‌ಗಳಿಗೆ ಭರ್ತಿಯಾಗುತ್ತವೆ.
+              </span>
+            </div>
+
+            {/* DDO Input Fields Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+              <div>
+                <label className="block font-bold text-stone-700 mb-1">
+                  ಡಿಡಿಓ ಅಧಿಕಾರಿಗಳ ಹೆಸರು *
+                </label>
+                <input
+                  type="text"
+                  name="ddoOfficerName"
+                  value={ddoOfficerName}
+                  onChange={(e) => setDdoOfficerName(e.target.value)}
+                  placeholder="ಹೆಚ್. ರವಿಕುಮಾರ್ (ಡಿಡಿಓ ಅಧಿಕಾರಿ)"
+                  required
+                  className="w-full px-2.5 py-1.5 border border-stone-300 rounded bg-white font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-stone-700 mb-1">
+                  ಡಿಡಿಓ ಪದನಾಮ / ಹುದ್ದೆ *
+                </label>
+                <input
+                  type="text"
+                  name="ddoDesignation"
+                  value={ddoDesignation}
+                  onChange={(e) => setDdoDesignation(e.target.value)}
+                  placeholder="ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ"
+                  required
+                  className="w-full px-2.5 py-1.5 border border-stone-300 rounded bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-stone-700 mb-1">
+                  ಕಛೇರಿ ಡಿಡಿಓ ಕೋಡ್ (DDO Code)
+                </label>
+                <input
+                  type="text"
+                  name="ddoCode"
+                  value={ddoCode}
+                  onChange={(e) => setDdoCode(e.target.value)}
+                  placeholder="14041ED001"
+                  className="w-full px-2.5 py-1.5 border border-stone-300 rounded bg-white font-mono font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-stone-700 mb-1">
+                  ಡಿಡಿಓ ಕೆ.ಜಿ.ಐ.ಡಿ ಸಂಖ್ಯೆ
+                </label>
+                <input
+                  type="text"
+                  name="ddoKgidNumber"
+                  value={ddoKgidNumber}
+                  onChange={(e) => setDdoKgidNumber(e.target.value)}
+                  placeholder="100101"
+                  className="w-full px-2.5 py-1.5 border border-stone-300 rounded bg-white font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-stone-700 mb-1">
+                  ಡಿಡಿಓ ಮೊಬೈಲ್ ಸಂಖ್ಯೆ
+                </label>
+                <input
+                  type="text"
+                  name="ddoMobile"
+                  value={ddoMobile}
+                  onChange={(e) => setDdoMobile(e.target.value)}
+                  placeholder="9448991201"
+                  className="w-full px-2.5 py-1.5 border border-stone-300 rounded bg-white font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-stone-700 mb-1">
+                  ಡಿಡಿಓ ಅಧಿಕೃತ ಇಮೇಲ್
+                </label>
+                <input
+                  type="email"
+                  name="ddoEmail"
+                  value={ddoEmail}
+                  onChange={(e) => setDdoEmail(e.target.value)}
+                  placeholder="beo.bhadravathi@karnataka.gov.in"
+                  className="w-full px-2.5 py-1.5 border border-stone-300 rounded bg-white"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block font-bold text-stone-700 mb-1">
+                  ಡಿಡಿಓ ಕಚೇರಿ ಹೆಸರು & ವಿಳಾಸ
+                </label>
+                <input
+                  type="text"
+                  name="ddoOfficeName"
+                  value={ddoOfficeName}
+                  onChange={(e) => setDdoOfficeName(e.target.value)}
+                  placeholder="ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ"
+                  className="w-full px-2.5 py-1.5 border border-stone-300 rounded bg-white"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-b border-stone-200 pb-3 pt-2">
             <h3 className="font-bold text-sm text-stone-900 font-sans">
-              ಕಛೇರಿ ಹಾಗೂ ಸಕ್ಷಮ ಪ್ರಾಧಿಕಾರದ ವಿವರಗಳು (Office & Authority Setup)
+              ಕಛೇರಿ ಹಾಗೂ ಸಕ್ಷಮ ಪ್ರಾಧಿಕಾರದ ಸಾಮಾನ್ಯ ವಿವರಗಳು (Office & General Setup)
             </h3>
             <p className="text-xs text-stone-500 mt-0.5">
               ಈ ವಿವರಗಳು ಸೃಜಿಸಲಾಗುವ ಎಲ್ಲಾ ಅಧಿಕೃತ ಜ್ಞಾಪನಾ ಆದೇಶಗಳ ಹೆಡರ್, ಸೀಲ್ ಹಾಗೂ ಸಹಿ ಬ್ಲಾಕ್‌ನಲ್ಲಿ ಪ್ರದರ್ಶಿತವಾಗಲಿವೆ.

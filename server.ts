@@ -1454,9 +1454,43 @@ function loadExcelEmployeesFromChunks(): Employee[] {
 }
 
 const initialExcelEmployees = loadExcelEmployeesFromChunks();
+
+const EMPLOYEES_STORAGE_FILE = path.join(process.cwd(), 'data', 'employees_store.json');
+
+function savePersistentEmployees(list: Employee[]) {
+  try {
+    const dir = path.dirname(EMPLOYEES_STORAGE_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(EMPLOYEES_STORAGE_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save persistent employees to disk:', err);
+  }
+}
+
+function loadPersistentEmployees(): Employee[] {
+  try {
+    if (fs.existsSync(EMPLOYEES_STORAGE_FILE)) {
+      const raw = fs.readFileSync(EMPLOYEES_STORAGE_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        console.log(`[Storage] Loaded ${parsed.length} persistent employees from disk.`);
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load persistent employees from disk:', err);
+  }
+
+  const initial = [...sampleEmployees, ...initialExcelEmployees];
+  savePersistentEmployees(initial);
+  return initial;
+}
+
 let letters: EducationLetter[] = [...sampleLetters];
 let docketFiles: MasterDocketFile[] = [...sampleDocketFiles];
-let employees: Employee[] = [...sampleEmployees, ...initialExcelEmployees];
+let employees: Employee[] = loadPersistentEmployees();
 
 export interface ServerOfficeSection {
   id: string;
@@ -2077,6 +2111,7 @@ app.post('/api/employees', (req, res) => {
     console.warn('Sync to memorandum DB:', syncErr);
   }
 
+  savePersistentEmployees(employees);
   res.status(201).json({ employee: newEmp, message: 'Employee added successfully' });
 });
 
@@ -2185,6 +2220,7 @@ app.put('/api/employees/:id', (req, res) => {
     console.warn('Sync update to memorandum DB:', syncErr);
   }
 
+  savePersistentEmployees(employees);
   res.json({ employee: updated, message: 'Employee data updated successfully' });
 });
 
@@ -2209,7 +2245,7 @@ app.post('/api/employees/batch-upload', (req, res) => {
     }
 
     const code = raw.employeeCode ? String(raw.employeeCode).trim() : `EDN-EMP-${Math.floor(1000 + Math.random() * 9000)}`;
-    const existingIndex = employees.findIndex(e => e.employeeCode.toLowerCase() === code.toLowerCase());
+    const existingIndex = employees.findIndex(e => e.employeeCode.toLowerCase() === code.toLowerCase() || (raw.kgidNumber && e.kgidNumber && e.kgidNumber.trim() === String(raw.kgidNumber).trim()));
 
     if (existingIndex >= 0) {
       if (overwriteExisting) {
@@ -2266,6 +2302,8 @@ app.post('/api/employees/batch-upload', (req, res) => {
     }
   }
 
+  savePersistentEmployees(employees);
+
   res.json({
     message: `Batch upload complete: ${importedCount} imported, ${updatedCount} updated, ${skippedCount} skipped.`,
     importedCount,
@@ -2291,6 +2329,7 @@ app.delete('/api/employees/:id', (req, res) => {
     }
   } catch (e) {}
 
+  savePersistentEmployees(employees);
   res.json({ message: 'Employee record deleted successfully', employee: deleted });
 });
 
@@ -2310,6 +2349,7 @@ app.post('/api/employees/batch-delete', (req, res) => {
     }
   } catch (e) {}
 
+  savePersistentEmployees(employees);
   const deletedCount = beforeCount - employees.length;
   res.json({ 
     message: `${deletedCount} ನೌಕರರ ದಾಖಲೆಗಳನ್ನು ಯಶಸ್ವಿಯಾಗಿ ಅಳಿಸಲಾಗಿದೆ (Employees removed)`,
@@ -2328,6 +2368,7 @@ app.delete('/api/employees-all', (req, res) => {
     }
   } catch (e) {}
 
+  savePersistentEmployees(employees);
   res.json({ 
     message: `ಎಲ್ಲಾ ${count} ನೌಕರರ ದಾಖಲೆಗಳನ್ನು ಯಶಸ್ವಿಯಾಗಿ ತೆಗೆಯಲಾಗಿದೆ (All employees removed)`,
     deletedCount: count,
@@ -2338,10 +2379,44 @@ app.delete('/api/employees-all', (req, res) => {
 app.post('/api/employees/seed', (req, res) => {
   const freshLoaded = loadExcelEmployeesFromChunks();
   employees = freshLoaded.length > 0 ? [...sampleEmployees, ...freshLoaded] : [...sampleEmployees];
+  savePersistentEmployees(employees);
   res.json({
     message: `Bhadravathi BEO establishment seeded successfully with ${employees.length} employee records.`,
     count: employees.length,
     employees,
+  });
+});
+
+// 15b-2. Bidirectional Client / Cloud Sync for Employees
+app.post('/api/employees/sync', (req, res) => {
+  const { clientEmployees = [] } = req.body;
+  if (!Array.isArray(clientEmployees)) {
+    return res.status(400).json({ error: 'clientEmployees array is required' });
+  }
+
+  let addedCount = 0;
+  for (const clientEmp of clientEmployees) {
+    if (!clientEmp || !clientEmp.fullName) continue;
+    const exists = employees.some(e => 
+      (clientEmp.id && e.id === clientEmp.id) ||
+      (clientEmp.kgidNumber && e.kgidNumber && e.kgidNumber.trim() === clientEmp.kgidNumber.trim()) ||
+      (clientEmp.employeeCode && e.employeeCode && e.employeeCode.toLowerCase() === clientEmp.employeeCode.toLowerCase())
+    );
+    if (!exists) {
+      employees.push(clientEmp);
+      addedCount++;
+    }
+  }
+
+  if (addedCount > 0) {
+    savePersistentEmployees(employees);
+  }
+
+  res.json({ 
+    success: true, 
+    addedCount, 
+    totalEmployees: employees.length,
+    employees 
   });
 });
 
@@ -2986,6 +3061,86 @@ ${attachedDocumentsList || '1. ಈ ಕಛೇರಿಯ ಪ್ರಮಾಣೀಕ�
   } catch (err: any) {
     console.error('AI Draft RTI Reply error:', err);
     res.status(500).json({ error: 'Failed to generate RTI reply letter', details: err?.message });
+  }
+});
+
+// 16c. Multi-turn AI Chatbot Interface using Gemini (models/gemini-3.8-flash, gemini-3.5-flash, gemini-3.1-flash-lite, gemini-3.1-pro-preview)
+app.post('/api/ai/chat', async (req, res) => {
+  try {
+    const { messages = [], model = 'gemini-3.8-flash', systemInstruction } = req.body;
+
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'Messages array is required' });
+    }
+
+    const gemini = getGeminiClient();
+    const defaultInstruction = `You are the Official AI Legal & Administrative Assistant for Karnataka School Education & Literacy Department, Office of the Block Education Officer (BEO), Bhadravathi, Shivamogga District.
+You have expert authority on:
+1. Karnataka Civil Services Rules (KCSR 1958) - Pension rules (Rule 287, 292B, Appendix-I commutation), Earned Leave (Rule 118A), Time Bound Advancement (10, 15, 20, 25, 30 years promotions / Prapathra-28), Child Care Leave (CCL 180 days), and Disciplinary rules (KCS CCA 1957).
+2. Right to Information Act 2005 (ಮಾಹಿತಿ ಹಕ್ಕು ಅಧಿನಿಯಮ ೨೦೦೫) - Section 6(1) applications, Section 6(3) 5-day transfer to other public authorities, Section 7(1) 30-day statutory response timelines (and 48 hours for life/liberty), Section 7(3) additional fee calculation, Section 8(1) & 9 statutory exemption clauses, Section 19(1) First Appeal before BEO (FAA), Section 19(3) KIC appeal, and Section 20 penalty provisions.
+3. Official correspondence drafting (ಸರ್ಕಾರಿ ಪತ್ರ ವ್ಯವಹಾರ), Dockets, Registers, LPC, Service Verification, and G.O. guidelines.
+
+Always respond helpfully, accurately, and politely in formal administrative Kannada (and English where technical clarity is needed). Cite the exact KCSR rule or RTI section when advising on legal queries.`;
+
+    const activeInstruction = systemInstruction || defaultInstruction;
+
+    if (gemini) {
+      const contents = messages.map((m: any) => ({
+        role: m.role === 'model' || m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: typeof m.content === 'string' ? m.content : (m.parts?.[0]?.text || '') }]
+      }));
+
+      const chosenModel = model || 'gemini-3.8-flash';
+      try {
+        const response = await gemini.models.generateContent({
+          model: chosenModel,
+          contents: contents,
+          config: {
+            systemInstruction: activeInstruction,
+            temperature: 0.4,
+          }
+        });
+
+        const reply = response.text || '';
+        return res.json({ reply, modelUsed: chosenModel });
+      } catch (geminiErr: any) {
+        console.warn(`Gemini chat with ${chosenModel} error, trying fallback:`, geminiErr?.message);
+        
+        const fallbackRes = await callGeminiWithFallback(gemini, async (client, mName) => {
+          const resp = await client.models.generateContent({
+            model: mName,
+            contents: contents,
+            config: {
+              systemInstruction: activeInstruction,
+              temperature: 0.4,
+            }
+          });
+          return resp.text || '';
+        });
+
+        if (fallbackRes?.result) {
+          return res.json({ reply: fallbackRes.result, modelUsed: fallbackRes.modelUsed });
+        }
+      }
+    }
+
+    const lastUserMsg = messages[messages.length - 1]?.content || messages[messages.length - 1]?.parts?.[0]?.text || '';
+    const qLower = String(lastUserMsg).toLowerCase();
+
+    let fallbackReply = `ನಮಸ್ಕಾರ, ನಾನು ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಚೇರಿಯ (BEO) KCSR & RTI AI ಸಹಾಯಕ.\n\nನಿಮ್ಮ ಪ್ರಶ್ನೆ: "${lastUserMsg}"\n\n`;
+
+    if (qLower.includes('rti') || qLower.includes('ಮಾಹಿತಿ ಹಕ್ಕು') || qLower.includes('೬(೩)') || qLower.includes('6(3)')) {
+      fallbackReply += `ಮಾಹಿತಿ ಹಕ್ಕು ಅಧಿನಿಯಮ ೨೦೦೫ ರ ಪ್ರಮುಖ ಅಂಶಗಳು:\n- ಕಲಂ ೬(೧): ಸಾರ್ವಜನಿಕರು ₹೧೦ ಅರ್ಜಿ ಶುಲ್ಕದೊಂದಿಗೆ ಮಾಹಿತಿ ಕೋರಬಹುದು (BPL ಕಾರ್ಡ್‌ದಾರರಿಗೆ ಶುಲ್ಕ ವಿನಾಯಿತಿ).\n- ಕಲಂ ೬(೩): ಕೋರಿದ ಮಾಹಿತಿ ಬೇರೆ ಸಾರ್ವಜನಿಕ ಪ್ರಾಧಿಕಾರಕ್ಕೆ ಸಂಬಂಧಿಸಿದ್ದಲ್ಲಿ ೫ ದಿನಗಳೊಳಗೆ ಅರ್ಜಿ ವರ್ಗಾಯಿಸಬೇಕು ಮತ್ತು ಅರ್ಜಿದಾರರಿಗೆ ತಿಳಿಸಬೇಕು.\n- ಕಲಂ ೭(೧): ಅರ್ಜಿ ಸ್ವೀಕರಿಸಿದ ೩೦ ದಿನಗಳೊಳಗೆ ಮಾಹಿತಿ ಒದಗಿಸುವುದು ಕಡ್ಡಾಯ (ವ್ಯಕ್ತಿಯ ಜೀವ ಅಥವಾ ಸ್ವಾತಂತ್ರ್ಯಕ್ಕೆ ಸಂಬಂಧಿಸಿದ್ದಲ್ಲಿ ೪೮ ಗಂಟೆಗಳೊಳಗೆ).\n- ಕಲಂ ೧೯(೧): ಮಾಹಿತಿ ದೊರೆಯದಿದ್ದರೆ ಅಥವಾ ತೃಪ್ತಿಕರವಲ್ಲದಿದ್ದರೆ ೩೦ ದಿನಗಳೊಳಗೆ ಪ್ರಥಮ ಮೇಲ್ಮನವಿ ಪ್ರಾಧಿಕಾರಕ್ಕೆ (BEO) ಮೇಲ್ಮನವಿ ಸಲ್ಲಿಸಬಹುದು.`;
+    } else if (qLower.includes('pension') || qLower.includes('ಪಿಂಚಣಿ') || qLower.includes('gratuity') || qLower.includes('ಉಪದಾನ')) {
+      fallbackReply += `KCSR ಪಿಂಚಣಿ ಹಾಗೂ ನಿವೃತ್ತಿ ಸೌಲಭ್ಯಗಳ ನಿಯಮಗಳು:\n- ನಿಯಮ ೨೮೭(೨): ಮಾಸಿಕ ಪಿಂಚಣಿ = (ಕೊನೆಯ ಮೂಲ ವೇತನ ÷ ೨) × (ಅರ್ಹತಾ ಅರ್ಧವಾರ್ಷಿಕ ಅವಧಿಗಳು ÷ ೬೦), ಕನಿಷ್ಠ ₹13,500, ಗರಿಷ್ಠ ₹75,300.\n- ನಿಯಮ ೨೯೨B: ನಿವೃತ್ತಿ ಉಪದಾನ (DCRG) = (ಮೂಲ ವೇತನ + DA) ÷ ೪ × ಅರ್ಧವಾರ್ಷಿಕ ಅವಧಿಗಳು (ಗರಿಷ್ಠ ೧೬.೫ ತಿಂಗಳು ಹಾಗೂ ಗರಿಷ್ಠ ₹೨೦,೦೦,೦೦೦).\n- ನಿಯಮ ೩೭೬ & Appendix-I: ಪಿಂಚಣಿ ಪರಿವರ್ತನೆ (CVP) ಗರಿಷ್ಠ ೪೦% ಮತ್ತು ೧೫ ವರ್ಷಗಳ ನಂತರ ಮೂಲ ಪಿಂಚಣಿ ಮರುಸ್ಥಾಪನೆ.\n- ನಿಯಮ ೧೧೮A: ಗಳಿಕೆ ರಜೆ ನಗದೀಕರಣ ಗರಿಷ್ಠ ೩೦೦ ದಿನಗಳ ಮಿತಿಯೊಳಗೆ.`;
+    } else {
+      fallbackReply += `ಕರ್ನಾಟಕ ನಾಗರಿಕ ಸೇವಾ ನಿಯಮಾವಳಿಗಳು (KCSR) ಮತ್ತು ಮಾಹಿತಿ ಹಕ್ಕು ಅಧಿನಿಯಮ (RTI 2005) ಅಡಿಯಲ್ಲಿ ಎಲ್ಲಾ ಸೇವಾ ವಿಷಯಗಳು, ಪಿಂಚಣಿ ಲೆಕ್ಕಾಚಾರ, ವೇತನ ಬಡ್ತಿ (ಪ್ರಪತ್ರ-೨೮) ಮತ್ತು ಪತ್ರ ವ್ಯವಹಾರಗಳಿಗೆ ಈ ತಂತ್ರಾಂಶದಲ್ಲಿ ಸಂಪೂರ್ಣ ನಮೂನೆಗಳು ಲಭ್ಯವಿವೆ. ದಯವಿಟ್ಟು ನಿರ್ದಿಷ್ಟ ಪ್ರಶ್ನೆ ಅಥವಾ ನಿಯಮವನ್ನು ಕೇಳಿ.`;
+    }
+
+    return res.json({ reply: fallbackReply, modelUsed: 'deterministic-administrative-engine' });
+  } catch (err: any) {
+    console.error('Chat error:', err);
+    res.status(500).json({ error: 'Chat failed', details: err?.message });
   }
 });
 
@@ -3843,6 +3998,12 @@ app.post('/api/letter-maker/generate-letter', async (req, res) => {
     else if (/ಮಾಹಿತಿ.*ಹಕ್ಕು|rti/i.test(typeStr)) subCode = 'ಮಾ.ಹ.ಪ';
     const letterNo = customLetterNumber || `ಸಂ: ಆ2/ಸ.ಪ್ರಾ.ಶಿ/${subCode}/${Math.floor(10 + Math.random() * 90)}-01/${academicYear}`;
 
+    const ddoEmployee = employees.find(e => (e as any).isDdo === true);
+    const officeCfg = db.getOfficeConfig();
+    const ddoSignatoryName = ddoEmployee?.fullName || officeCfg?.ddoOfficerName || officeCfg?.officerName || 'ಹೆಚ್. ರವಿಕುಮಾರ್';
+    const ddoSignatoryDesignation = ddoEmployee?.designation || officeCfg?.ddoDesignation || officeCfg?.officerDesignation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ';
+    const ddoSignatoryOffice = ddoEmployee?.placeOfWork || ddoEmployee?.officeLocation || officeCfg?.ddoOfficeName || officeCfg?.officeName || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು';
+
     const gemini = getGeminiClient();
 
     let generatedLetterData: any = null;
@@ -3900,13 +4061,13 @@ STRICT GOVERNMENT LETTER GUIDELINES:
      "bodyText": "... (Clean plain text format)",
      "endorsements": ["ಪ್ರತಿಯನ್ನು 1...", "ಪ್ರತಿಯನ್ನು 2..."],
      "signatory": {
-       "name": "ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು",
-       "designation": "ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು",
-       "office": "ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ"
+       "name": "${ddoSignatoryName}",
+       "designation": "${ddoSignatoryDesignation}",
+       "office": "${ddoSignatoryOffice}"
      },
      "hasMissingInfo": ${hasMissingCritical},
      "missingItems": ${JSON.stringify(missingItems)}
-   }`;
+   };`;
 
       try {
         const aiResult = await callGeminiWithFallback(gemini, async (client, model) => {
@@ -3997,9 +4158,9 @@ STRICT GOVERNMENT LETTER GUIDELINES:
           'ಕಛೇರಿ ಕಡತಕ್ಕೆ.',
         ],
         signatory: {
-          name: 'ಬಿ.ಕೆ. ನಾರಾಯಣಪ್ಪ',
-          designation: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು',
-          office: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
+          name: ddoSignatoryName,
+          designation: ddoSignatoryDesignation,
+          office: ddoSignatoryOffice,
         },
         hasMissingInfo: hasMissingCritical,
         missingItems,
@@ -4227,11 +4388,13 @@ Return ONLY a strict JSON object with fields:
       };
     }
 
-    // Standard Signatory (BEO Officer Bhadravathi):
+    // Standard Signatory (Dynamically pulled from DDO officer):
+    const ddoEmpGen = employees.find(e => (e as any).isDdo === true);
+    const officeCfgGen = db.getOfficeConfig();
     const signatory = {
-      name: 'ಬಿ.ಕೆ. ನಾರಾಯಣಪ್ಪ',
-      designation: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು',
-      office: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
+      name: ddoEmpGen?.fullName || officeCfgGen?.ddoOfficerName || officeCfgGen?.officerName || 'ಹೆಚ್. ರವಿಕುಮಾರ್',
+      designation: ddoEmpGen?.designation || officeCfgGen?.ddoDesignation || officeCfgGen?.officerDesignation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ',
+      office: ddoEmpGen?.placeOfWork || ddoEmpGen?.officeLocation || officeCfgGen?.ddoOfficeName || officeCfgGen?.officeName || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
     };
 
     // Construct the complete letter record

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { EducationLetter, ActionNote } from '../types';
+import { PrintPreviewModal } from './PrintPreviewModal';
 import { 
   X, 
   Printer, 
@@ -41,6 +42,7 @@ export const LetterViewerModal: React.FC<LetterViewerModalProps> = ({
   onUpdateStatus,
 }) => {
   const [activeTab, setActiveTab] = useState<'document' | 'notes' | 'attachments' | 'ai_brief'>('document');
+  const [isPrintPreviewOpen, setIsPrintPreviewOpen] = useState(false);
   const [newNoteText, setNewNoteText] = useState('');
   const [authorName, setAuthorName] = useState('Dr. Alistair Vance');
   const [authorDesignation, setAuthorDesignation] = useState('Director of School Education');
@@ -51,6 +53,33 @@ export const LetterViewerModal: React.FC<LetterViewerModalProps> = ({
   const [aiSummary, setAiSummary] = useState<any | null>(null);
   const [isLoadingAi, setIsLoadingAi] = useState(false);
 
+  // Dynamic DDO Officer State
+  const [ddoOfficer, setDdoOfficer] = useState<{
+    name: string;
+    designation: string;
+    office: string;
+  }>({
+    name: 'ಹೆಚ್. ರವಿಕುಮಾರ್',
+    designation: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ',
+    office: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
+  });
+
+  useEffect(() => {
+    fetch('/api/memorandum/office-config')
+      .then(res => res.json())
+      .then(data => {
+        const cfg = data.office || data.config;
+        if (cfg?.ddoOfficerName || cfg?.officerName) {
+          setDdoOfficer({
+            name: cfg.ddoOfficerName || cfg.officerName,
+            designation: cfg.ddoDesignation || cfg.officerDesignation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ',
+            office: cfg.ddoOfficeName || cfg.officeName || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     setAiSummary(null);
   }, [letter?.id]);
@@ -58,7 +87,7 @@ export const LetterViewerModal: React.FC<LetterViewerModalProps> = ({
   if (!isOpen || !letter) return null;
 
   const handlePrint = () => {
-    window.print();
+    setIsPrintPreviewOpen(true);
   };
 
   const handleAppendNote = async (e: React.FormEvent) => {
@@ -297,9 +326,9 @@ export const LetterViewerModal: React.FC<LetterViewerModalProps> = ({
               <div className="pt-6 flex justify-end">
                 <div className="text-center min-w-[240px] space-y-1">
                   <p className="text-xs text-stone-600 mb-6">ತಮ್ಮ ನಂಬುಗೆಯ, ಸಹಿ/-</p>
-                  <p className="font-bold text-xs text-stone-950">(ಬಿ.ಕೆ. ನಾರಾಯಣಪ್ಪ)</p>
-                  <p className="font-bold text-[11px] text-stone-900">ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು</p>
-                  <p className="text-[11px] text-stone-800">ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು</p>
+                  <p className="font-bold text-xs text-stone-950">({(letter as any).signatoryName || (letter.direction === 'outward' && letter.senderName ? letter.senderName : ddoOfficer.name)})</p>
+                  <p className="font-bold text-[11px] text-stone-900">{(letter as any).signatoryDesignation || (letter.direction === 'outward' && letter.senderDesignation ? letter.senderDesignation : ddoOfficer.designation)}</p>
+                  <p className="text-[11px] text-stone-800">{(letter as any).signatoryOffice || ddoOfficer.office}</p>
                 </div>
               </div>
 

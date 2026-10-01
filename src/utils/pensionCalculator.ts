@@ -43,14 +43,83 @@ export interface PensionInputData {
   doa: string; // Date of Appointment (YYYY-MM-DD)
   dor: string; // Date of Retirement (YYYY-MM-DD)
   dob?: string;
+  retirementAgeYears?: 60 | 65; // 60 for state govt/school, 65 for UGC/special cadres
   nonQualifyingDays?: number;
   lastBasicPay: number;
   daPercentage?: number;
   averageEmoluments?: number;
   earnedLeaveDays?: number;
+  halfPayLeaveDays?: number;
   commutationOpted?: boolean;
   commutationPercentage?: number;
   ageNextBirthday?: number;
+}
+
+/**
+ * Calculates official Karnataka Government retirement date and verifies 60 vs 65 years.
+ * KCSR Rule 95 / standard Karnataka practice:
+ * - If employee is born on the 1st day of a month, they retire on the afternoon of the last day of the PRECEDING month.
+ * - If employee is born between the 2nd and last day of a month, they retire on the afternoon of the last day of THAT MONTH.
+ * - Standard retirement age: 60 years (School Education / State Civil Services).
+ * - UGC / University / Collegiate / Medical specialists: 65 years.
+ */
+export function calculateRetirementDate(dobStr: string, retirementAge: 60 | 65 = 60) {
+  if (!dobStr) {
+    return {
+      dor: '',
+      retirementAge,
+      ageNextBirthday: retirementAge === 65 ? 66 : 61,
+      ruleSummary: 'ದಯವಿಟ್ಟು ಜನ್ಮ ದಿನಾಂಕವನ್ನು ನಮೂದಿಸಿ',
+      isFirstOfMonth: false
+    };
+  }
+
+  const parts = dobStr.split('-');
+  if (parts.length < 3) {
+    return {
+      dor: '',
+      retirementAge,
+      ageNextBirthday: retirementAge === 65 ? 66 : 61,
+      ruleSummary: 'ಅಮಾನ್ಯ ದಿನಾಂಕ ರೂಪ',
+      isFirstOfMonth: false
+    };
+  }
+
+  const birthYear = parseInt(parts[0], 10);
+  const birthMonth = parseInt(parts[1], 10) - 1; // 0-indexed (0=Jan, 11=Dec)
+  const birthDay = parseInt(parts[2], 10);
+
+  const retYear = birthYear + retirementAge;
+  let targetMonth = birthMonth;
+  let targetYear = retYear;
+  const isFirstOfMonth = birthDay === 1;
+
+  if (isFirstOfMonth) {
+    targetMonth = birthMonth - 1;
+    if (targetMonth < 0) {
+      targetMonth = 11;
+      targetYear -= 1;
+    }
+  }
+
+  // Get last calendar day of target month
+  const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+  const mStr = String(targetMonth + 1).padStart(2, '0');
+  const dStr = String(lastDay).padStart(2, '0');
+  const dor = `${targetYear}-${mStr}-${dStr}`;
+
+  const ageNextBirthday = retirementAge === 65 ? 66 : 61;
+  const ruleSummary = isFirstOfMonth
+    ? `೧ನೇ ತಾರೀಖು ಜನ್ಮದಿನವಾಗಿರುವುದರಿಂದ ಹಿಂದಿನ ಮಾಹೆಯ ಕೊನೆಯ ದಿನಾಂಕದಂದು ವಯೋನಿವೃತ್ತಿ (${retirementAge} ವರ್ಷಗಳು)`
+    : `${targetMonth + 1}ನೇ ಮಾಹೆಯ ಅಂತ್ಯಕ್ಕೆ ವಯೋನಿವೃತ್ತಿ (${retirementAge} ವರ್ಷಗಳು)`;
+
+  return {
+    dor,
+    retirementAge,
+    ageNextBirthday,
+    ruleSummary,
+    isFirstOfMonth
+  };
 }
 
 /**
@@ -132,24 +201,33 @@ export function calculateServicePeriod(startDateStr: string, endDateStr: string,
     netYears,
     netMonths,
     netDays,
-    completedHalfYears: cappedHalfYears
+    completedHalfYears: cappedHalfYears,
+    rawHalfYears: halfYears
   };
 }
 
 /**
- * Computes all KCSR Pension & Terminal Benefits.
+ * Computes all KCSR Pension & Terminal Benefits with 4 distinct separate calculations:
+ * 1. Monthly Pension (Service Pension & Family Pension)
+ * 2. Retirement Gratuity (DCRG)
+ * 3. Commutation of Pension
+ * 4. Earned Leave (EL) & HPL Encashment
+ * Supports 60 or 65 years retirement age verification.
  */
 export function computePensionDetails(input: PensionInputData): PensionCalculationResult {
   const {
     doa,
     dor,
+    dob,
+    retirementAgeYears = 60,
     nonQualifyingDays = 0,
     lastBasicPay,
     daPercentage = DEFAULT_DA_PERCENTAGE,
     earnedLeaveDays = 300,
+    halfPayLeaveDays = 0,
     commutationOpted = true,
     commutationPercentage = 40, // Standard Karnataka max 40% (or 33.33%)
-    ageNextBirthday = 61
+    ageNextBirthday
   } = input;
 
   const service = calculateServicePeriod(doa, dor, nonQualifyingDays);
@@ -158,6 +236,14 @@ export function computePensionDetails(input: PensionInputData): PensionCalculati
   const daAmount = Math.round((basicPay * daRate) / 100);
   const avgEmoluments = input.averageEmoluments ? Number(input.averageEmoluments) : basicPay;
 
+  // Determine age next birthday based on retirement age if not explicitly provided
+  const effectiveAgeNextBirthday = ageNextBirthday 
+    ? Number(ageNextBirthday) 
+    : (retirementAgeYears === 65 ? 66 : 61);
+
+  // ---------------------------------------------------------------------------
+  // 1. PENSION CALCULATION (೧. ಮಾಸಿಕ ಪಿಂಚಣಿ ಲೆಕ್ಕಾಚಾರ)
+  // ---------------------------------------------------------------------------
   // Full Pension (50% of Basic Pay / Emoluments)
   const fullPension = Math.round(avgEmoluments / 2);
 
@@ -183,10 +269,34 @@ export function computePensionDetails(input: PensionInputData): PensionCalculati
     basicServicePension = Math.max(MIN_PENSION_KARNATAKA, Math.min(MAX_PENSION_KARNATAKA, basicServicePension));
   }
 
-  // Commutation Calculation
+  // Dearness Relief (DR): As per Karnataka Pension Rules, DR is paid on the FULL Basic Pension, not the reduced pension.
+  const dearnessRelief = Math.round((basicServicePension * daRate) / 100);
+  const medicalAllowance = basicServicePension > 0 ? FIXED_MEDICAL_ALLOWANCE : 0;
+
+  // Family Pension
+  // Normal: 30% of Basic Pay (subject to minimum ₹13,500)
+  const familyPensionNormal = Math.max(MIN_PENSION_KARNATAKA, Math.round(basicPay * 0.30));
+  // Enhanced: 50% of Basic Pay (payable for 7 years from date of retirement or till age 67)
+  const familyPensionEnhanced = Math.round(basicPay * 0.50);
+
+  // ---------------------------------------------------------------------------
+  // 2. RETIREMENT GRATUITY / DCRG (೨. ನಿವೃತ್ತಿ ಉಪದಾನ ಲೆಕ್ಕಾಚಾರ)
+  // ---------------------------------------------------------------------------
+  // Formula: 1/4th of Emoluments (Basic + DA) for each completed six-monthly period of qualifying service (capped at 66 half years)
+  // Maximum limit: 16.5 times emoluments or ₹20 Lakhs, whichever is less.
+  const monthlyEmolumentsForGratuity = basicPay + daAmount;
+  const dcrgQualifyingHalfYears = Math.min(66, service.completedHalfYears);
+  const dcrgRaw = Math.round((monthlyEmolumentsForGratuity / 4) * dcrgQualifyingHalfYears);
+  const max16HalfTimes = Math.round(monthlyEmolumentsForGratuity * 16.5);
+  const dcrgSanctioned = Math.min(dcrgRaw, max16HalfTimes, MAX_DCRG_CEILING);
+
+  // ---------------------------------------------------------------------------
+  // 3. COMMUTATION OF PENSION (೩. ಪಿಂಚಣಿ ಪರಿವರ್ತನೆ ಲೆಕ್ಕಾಚಾರ)
+  // ---------------------------------------------------------------------------
   let commutedPortion = 0;
   let commutationLumpSum = 0;
-  let factor = KCSR_COMMUTATION_FACTORS[ageNextBirthday] || DEFAULT_COMMUTATION_FACTOR;
+  const factor = KCSR_COMMUTATION_FACTORS[effectiveAgeNextBirthday] || 
+    (retirementAgeYears === 65 ? 7.591 : DEFAULT_COMMUTATION_FACTOR);
 
   if (commutationOpted && basicServicePension > 0) {
     const commPct = Math.min(40, Math.max(0, Number(commutationPercentage) || 0));
@@ -195,32 +305,30 @@ export function computePensionDetails(input: PensionInputData): PensionCalculati
   }
 
   const reducedMonthlyPension = Math.max(0, basicServicePension - commutedPortion);
-
-  // Dearness Relief (DR): As per Karnataka Pension Rules, DR is paid on the FULL Basic Pension, not the reduced pension.
-  const dearnessRelief = Math.round((basicServicePension * daRate) / 100);
-  const medicalAllowance = basicServicePension > 0 ? FIXED_MEDICAL_ALLOWANCE : 0;
   const totalMonthlyReceivable = reducedMonthlyPension + dearnessRelief + medicalAllowance;
 
-  // DCRG (Death-cum-Retirement Gratuity)
-  // Formula: 1/4th of Emoluments (Basic + DA) for each completed six-monthly period of qualifying service
-  // Maximum limit: 16.5 times emoluments or ₹20 Lakhs, whichever is less.
-  const monthlyEmolumentsForGratuity = basicPay + daAmount;
-  const dcrgRaw = Math.round((monthlyEmolumentsForGratuity / 4) * service.completedHalfYears);
-  const max16HalfTimes = Math.round(monthlyEmolumentsForGratuity * 16.5);
-  const dcrgSanctioned = Math.min(dcrgRaw, max16HalfTimes, MAX_DCRG_CEILING);
-
-  // Family Pension
-  // Normal: 30% of Basic Pay (subject to minimum ₹13,500)
-  const familyPensionNormal = Math.max(MIN_PENSION_KARNATAKA, Math.round(basicPay * 0.30));
-  // Enhanced: 50% of Basic Pay (payable for 7 years from date of retirement or till age 67)
-  const familyPensionEnhanced = Math.round(basicPay * 0.50);
-
-  // Earned Leave Encashment (up to 300 days)
+  // ---------------------------------------------------------------------------
+  // 4. EARNED LEAVE (EL) & HPL ENCASHMENT (೪. ಗಳಿಕೆ ರಜೆ ನಗದೀಕರಣ ಲೆಕ್ಕಾಚಾರ)
+  // ---------------------------------------------------------------------------
+  // Formula: ((Basic Pay + DA) / 30) * EL days (up to 300 days)
+  // If EL < 300 days, HPL can be encashed to fill shortfall up to combined 300 days limit
   const elDays = Math.min(300, Math.max(0, Number(earnedLeaveDays) || 0));
-  const leaveEncashmentAmount = Math.round(((basicPay + daAmount) / 30) * elDays);
+  const elDailyRate = (basicPay + daAmount) / 30;
+  const leaveEncashmentAmount = Math.round(elDailyRate * elDays);
 
-  // Total Terminal Lump Sum
-  const totalTerminalLumpSum = dcrgSanctioned + commutationLumpSum + leaveEncashmentAmount;
+  const rawHplDays = Math.max(0, Number(halfPayLeaveDays) || 0);
+  const hplEligibleDays = Math.min(rawHplDays, Math.max(0, 300 - elDays));
+  const halfPayEncashmentAmount = hplEligibleDays > 0 
+    ? Math.round((elDailyRate * (hplEligibleDays / 2))) 
+    : 0;
+
+  const totalLeaveEncashmentSanctioned = leaveEncashmentAmount + halfPayEncashmentAmount;
+
+  // ---------------------------------------------------------------------------
+  // GRAND TOTAL TERMINAL LUMP SUM BENEFITS (ಒಟ್ಟು ಅಂತಿಮ ನಿವೃತ್ತಿ ಗಂಟುಮೊತ್ತ)
+  // = Retirement Gratuity + Commutation Lump Sum + EL Encashment
+  // ---------------------------------------------------------------------------
+  const totalTerminalLumpSum = dcrgSanctioned + commutationLumpSum + totalLeaveEncashmentSanctioned;
 
   return {
     grossYears: service.grossYears,
@@ -233,12 +341,14 @@ export function computePensionDetails(input: PensionInputData): PensionCalculati
     qualifyingHalfYears: service.completedHalfYears,
     isEligibleForFullPension,
     isEligibleForRegularPension,
+    retirementAgeYears,
 
     lastBasicPay: basicPay,
     daPercentage: daRate,
     daAmount,
     averageEmoluments: avgEmoluments,
 
+    // 1. Pension
     fullPension,
     basicServicePension,
     commutedPortion,
@@ -247,19 +357,27 @@ export function computePensionDetails(input: PensionInputData): PensionCalculati
     medicalAllowance,
     totalMonthlyReceivable,
 
+    // 3. Commutation
     commutationFactor: factor,
     commutationLumpSum,
     commutationRestorationYears: 15,
 
+    // 2. Gratuity (DCRG)
     dcrgRaw,
     dcrgSanctioned,
 
+    // Family Pension
     familyPensionNormal,
     familyPensionEnhanced,
 
+    // 4. Leave Encashment
     earnedLeaveDays: elDays,
     leaveEncashmentAmount,
+    halfPayLeaveDays: rawHplDays,
+    halfPayEncashmentAmount,
+    totalLeaveEncashmentSanctioned,
 
+    // Grand Total Terminal Lump Sum
     totalTerminalLumpSum
   };
 }
@@ -1183,6 +1301,511 @@ export function generateNoDuesCertificateHtml(record: PensionCaseRecord, office:
 }
 
 /**
+ * 9. PENSION CALCULATION STATEMENT (ಸಮಗ್ರ ಪಿಂಚಣಿ ಹಾಗೂ ನಿವೃತ್ತಿ ಸೌಲಭ್ಯಗಳ ಪ್ರತ್ಯೇಕ ಲೆಕ್ಕಾಚಾರ ತಃಖ್ಯೆ - 4 Distinct Calculations)
+ * Covers: 1. Pension, 2. Retirement Gratuity, 3. Commutation of Pension, 4. EL Encashment
+ */
+export function generatePensionCalculationSheetHtml(record: PensionCaseRecord, office: OfficeConfig = DEFAULT_PENSION_OFFICE_CONFIG): string {
+  const calc = record.calculation;
+  const retAge = calc.retirementAgeYears || 60;
+  return `
+  <div class="karnataka-govt-document calc-sheet-container p-6 bg-white text-stone-900 font-kannada text-xs leading-relaxed max-w-[820px] mx-auto border border-stone-300">
+    <div class="text-center pb-2 border-b-2 border-stone-800">
+      <div class="font-bold text-xs tracking-wide">ಕರ್ನಾಟಕ ಸರ್ಕಾರ - ಶಾಲಾ ಶಿಕ್ಷಣ ಮತ್ತು ಸಾಕ್ಷರತಾ ಇಲಾಖೆ</div>
+      <div class="font-bold text-sm text-stone-950 mt-0.5">${office.officeName}</div>
+      <div class="text-xs text-stone-700">ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು, ಶಿವಮೊಗ್ಗ ಜಿಲ್ಲೆ</div>
+      <div class="font-bold text-sm text-stone-950 mt-1.5 underline">
+        ಪಿಂಚಣಿ ಮತ್ತು ನಿವೃತ್ತಿ ಸೌಲಭ್ಯಗಳ ಪ್ರತ್ಯೇಕ ಲೆಕ್ಕಾಚಾರ ತಃಖ್ಯೆ (PENSION & RETIREMENT BENEFITS CALCULATION SHEET)
+      </div>
+      <div class="text-[11px] text-stone-600 mt-0.5">
+        (ಕರ್ನಾಟಕ ನಾಗರಿಕ ಸೇವಾ ನಿಯಮಾವಳಿಗಳು KCSR & ೭ನೇ ವೇತನ ಆಯೋಗದ ನಿಯಮಾನುಸಾರ ತಯಾರಿಸಲಾಗಿದೆ)
+      </div>
+    </div>
+
+    <!-- HEADER DETAILS -->
+    <div class="flex justify-between items-center my-3 p-2 bg-stone-50 border border-stone-300 text-xs font-mono-code">
+      <div><strong>ಕಡತ ಸಂ:</strong> ${record.fileNumber}</div>
+      <div><strong>ಪ್ರಕರಣ ಸಂ:</strong> ${record.caseNumber}</div>
+      <div><strong>ದಿನಾಂಕ:</strong> ${record.dor || new Date().toISOString().split('T')[0]}</div>
+    </div>
+
+    <!-- EMPLOYEE & SERVICE PARTICULARS -->
+    <div class="mb-3">
+      <div class="bg-stone-800 text-white px-2 py-1 font-bold text-xs">
+        ನೌಕರರ ಸೇವಾ ವಿವರಗಳು & ವಯೋನಿವೃತ್ತಿ ಪರಿಶೀಲನೆ (SERVICE PARTICULARS & RETIREMENT AGE VERIFICATION)
+      </div>
+      <table class="w-full border-collapse border border-stone-400 mt-1 text-xs">
+        <tr>
+          <td class="border border-stone-400 p-1.5 w-1/4 bg-stone-50">ನೌಕರರ ಹೆಸರು</td>
+          <td class="border border-stone-400 p-1.5 font-bold">${record.employeeName}</td>
+          <td class="border border-stone-400 p-1.5 w-1/4 bg-stone-50">ಕೆ.ಜಿ.ಐ.ಡಿ ಸಂಖ್ಯೆ</td>
+          <td class="border border-stone-400 p-1.5 font-bold font-mono-code">${record.kgidNumber}</td>
+        </tr>
+        <tr>
+          <td class="border border-stone-400 p-1.5 bg-stone-50">ಹುದ್ದೆ & ಶಾಲೆ/ಕಚೇರಿ</td>
+          <td class="border border-stone-400 p-1.5">${record.designation}, ${record.officeOrSchool}</td>
+          <td class="border border-stone-400 p-1.5 bg-stone-50">ವೇತನ ಶ್ರೇಣಿ</td>
+          <td class="border border-stone-400 p-1.5 font-mono-code">${record.payScale}</td>
+        </tr>
+        <tr>
+          <td class="border border-stone-400 p-1.5 bg-stone-50">ಜನ್ಮ ದಿನಾಂಕ (DOB)</td>
+          <td class="border border-stone-400 p-1.5 font-mono-code">${record.dob}</td>
+          <td class="border border-stone-400 p-1.5 bg-stone-50">ಸೇವೆಗೆ ಸೇರಿದ ದಿನಾಂಕ (DOA)</td>
+          <td class="border border-stone-400 p-1.5 font-mono-code">${record.doa}</td>
+        </tr>
+        <tr>
+          <td class="border border-stone-400 p-1.5 bg-stone-50">ನಿವೃತ್ತಿ ವಯಸ್ಸು ಪರಿಶೀಲನೆ</td>
+          <td class="border border-stone-400 p-1.5 font-bold text-indigo-900">
+            ${retAge} ವರ್ಷಗಳು ${retAge === 65 ? '(ಯುಜಿಸಿ / ವಿಶೇಷ ವೃಂದ)' : '(ಸಾಮಾನ್ಯ ಸರ್ಕಾರಿ ನೌಕರರು / ಶಾಲಾ ಶಿಕ್ಷಣ)'}
+          </td>
+          <td class="border border-stone-400 p-1.5 bg-stone-50">ನಿವೃತ್ತಿ ದಿನಾಂಕ (DOR)</td>
+          <td class="border border-stone-400 p-1.5 font-bold font-mono-code text-indigo-950">${record.dor}</td>
+        </tr>
+        <tr>
+          <td class="border border-stone-400 p-1.5 bg-stone-50">ಒಟ್ಟು ಸೇವೆ</td>
+          <td class="border border-stone-400 p-1.5">${calc.grossYears} ವರ್ಷ, ${calc.grossMonths} ತಿಂಗಳು, ${calc.grossDays} ದಿನಗಳು</td>
+          <td class="border border-stone-400 p-1.5 bg-stone-50">ಅನರ್ಹತಾ ಸೇವೆ (EOL/Dies-non)</td>
+          <td class="border border-stone-400 p-1.5">${calc.nonQualifyingDays} ದಿನಗಳು</td>
+        </tr>
+        <tr class="bg-amber-50">
+          <td class="border border-stone-400 p-1.5 font-bold">ನಿವ್ವಳ ಅರ್ಹತಾ ಸೇವೆ</td>
+          <td class="border border-stone-400 p-1.5 font-bold text-emerald-900">
+            ${calc.netQualifyingYears} ವರ್ಷ, ${calc.netQualifyingMonths} ತಿಂಗಳು, ${calc.netQualifyingDays} ದಿನಗಳು
+          </td>
+          <td class="border border-stone-400 p-1.5 font-bold">ಅರ್ಧವಾರ್ಷಿಕ ಅವಧಿಗಳು</td>
+          <td class="border border-stone-400 p-1.5 font-bold text-emerald-900 font-mono-code">
+            ${calc.qualifyingHalfYears} (ಗರಿಷ್ಠ ಮಿತಿ: ೬೦)
+          </td>
+        </tr>
+        <tr>
+          <td class="border border-stone-400 p-1.5 bg-stone-50">ಕೊನೆಯ ಮೂಲ ವೇತನ</td>
+          <td class="border border-stone-400 p-1.5 font-bold font-mono-code">${formatINR(calc.lastBasicPay)}</td>
+          <td class="border border-stone-400 p-1.5 bg-stone-50">ತುಟ್ಟಿಭತ್ಯೆ (DA @ ${calc.daPercentage}%)</td>
+          <td class="border border-stone-400 p-1.5 font-bold font-mono-code">${formatINR(calc.daAmount)}</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- 4 DISTINCT SEPARATE CALCULATIONS -->
+    
+    <!-- 1. PENSION CALCULATION -->
+    <div class="mb-3 border border-stone-400">
+      <div class="bg-emerald-800 text-white px-2 py-1 font-bold text-xs flex justify-between">
+        <span>೧. ಮಾಸಿಕ ಪಿಂಚಣಿ ಲೆಕ್ಕಾಚಾರ (MONTHLY PENSION CALCULATION)</span>
+        <span class="text-[11px] font-normal">KCSR Rule 287 / 7th Pay Commission</span>
+      </div>
+      <div class="p-2 space-y-1.5 text-xs">
+        <div class="flex justify-between border-b border-stone-200 pb-1">
+          <span>(ಅ) ಪೂರ್ಣ ಪಿಂಚಣಿ (೫೦% ಮೂಲ ವೇತನ):</span>
+          <span class="font-mono-code font-bold">${formatINR(calc.fullPension)}</span>
+        </div>
+        <div class="flex justify-between border-b border-stone-200 pb-1">
+          <span>(ಆ) ಅರ್ಹತಾ ಸೇವಾವಧಿಯ ಅನುಪಾತದನ್ವಯ ಮೂಲ ಪಿಂಚಣಿ:</span>
+          <span class="font-mono-code font-bold">${formatINR(calc.basicServicePension)}</span>
+        </div>
+        <div class="text-[11px] text-stone-600 bg-stone-50 p-1 rounded font-mono-code">
+          ಸೂತ್ರ: (${formatINR(calc.fullPension)} × ${calc.qualifyingHalfYears} ಅರ್ಧವಾರ್ಷಿಕಗಳು) ÷ ೬೦ = <strong>${formatINR(calc.basicServicePension)}</strong> / ತಿಂಗಳಿಗೆ
+        </div>
+        <div class="flex justify-between border-b border-stone-200 pb-1">
+          <span>(ಇ) ತುಟ್ಟಿಭತ್ಯೆ ಪರಿಹಾರ (Dearness Relief @ ${calc.daPercentage}% on Basic Pension):</span>
+          <span class="font-mono-code">${formatINR(calc.dearnessRelief)}</span>
+        </div>
+        <div class="flex justify-between border-b border-stone-200 pb-1">
+          <span>(ಈ) ವೈದ್ಯಕೀಯ ಭತ್ಯೆ (Fixed Medical Allowance):</span>
+          <span class="font-mono-code">${formatINR(calc.medicalAllowance)}</span>
+        </div>
+        <div class="flex justify-between border-b border-stone-200 pb-1 bg-emerald-50 p-1">
+          <span class="font-bold text-emerald-950">(ಉ) ಪರಿವರ್ತನೆಯ ನಂತರದ ನಿವ್ವಳ ಮಾಸಿಕ ಪಿಂಚಣಿ (Reduced Pension + DR + FMA):</span>
+          <span class="font-mono-code font-bold text-emerald-950 text-sm">${formatINR(calc.totalMonthlyReceivable)} / ತಿಂಗಳಿಗೆ</span>
+        </div>
+        <div class="flex justify-between text-[11px] text-stone-700 pt-0.5">
+          <span>ಕುಟುಂಬ ಪಿಂಚಣಿ (Family Pension): ಸಾಮಾನ್ಯ ದರ: <strong>${formatINR(calc.familyPensionNormal)}</strong> | ಹೆಚ್ಚುವರಿ ದರ: <strong>${formatINR(calc.familyPensionEnhanced)}</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. RETIREMENT GRATUITY (DCRG) CALCULATION -->
+    <div class="mb-3 border border-stone-400">
+      <div class="bg-blue-800 text-white px-2 py-1 font-bold text-xs flex justify-between">
+        <span>೨. ನಿವೃತ್ತಿ ಉಪದಾನ ಲೆಕ್ಕಾಚಾರ (RETIREMENT GRATUITY / DCRG CALCULATION)</span>
+        <span class="text-[11px] font-normal">KCSR Rule 292 / Cap: ₹20,00,000</span>
+      </div>
+      <div class="p-2 space-y-1.5 text-xs">
+        <div class="flex justify-between border-b border-stone-200 pb-1">
+          <span>(ಅ) ಉಪದಾನಕ್ಕೆ ಪರಿಗಣಿಸಲಾದ ಒಟ್ಟು ಮಾಸಿಕ ವೇತನ (ಮೂಲ ವೇತನ ₹${calc.lastBasicPay.toLocaleString('en-IN')} + DA ₹${calc.daAmount.toLocaleString('en-IN')}):</span>
+          <span class="font-mono-code font-bold">${formatINR(calc.lastBasicPay + calc.daAmount)}</span>
+        </div>
+        <div class="flex justify-between border-b border-stone-200 pb-1">
+          <span>(ಆ) ಅರ್ಹತಾ ಅರ್ಧವಾರ್ಷಿಕ ಅವಧಿಗಳು (Qualifying Half Years):</span>
+          <span class="font-mono-code font-bold">${calc.qualifyingHalfYears} ಅವಧಿಗಳು</span>
+        </div>
+        <div class="text-[11px] text-stone-600 bg-stone-50 p-1 rounded font-mono-code">
+          ಸೂತ್ರ: [(ಮೂಲ ವೇತನ + DA) ÷ ೪] × ${calc.qualifyingHalfYears} = [${formatINR(calc.lastBasicPay + calc.daAmount)} ÷ ೪] × ${calc.qualifyingHalfYears} = <strong>${formatINR(calc.dcrgRaw)}</strong>
+        </div>
+        <div class="flex justify-between border-b border-stone-200 pb-1">
+          <span>(ಇ) ಗರಿಷ್ಠ ಪರಿಮಿತಿ ಮೌಲ್ಯಮಾಪನ (೧೬.೫ ತಿಂಗಳ ವೇತನ ಅಥವಾ ₹೨೦ ಲಕ್ಷಗಳು - ಇವೆರಡರಲ್ಲಿ ಯಾವುದು ಕಡಿಮೆಯೋ ಅದು):</span>
+          <span class="font-mono-code">ಗರಿಷ್ಠ: ₹೨೦,೦೦,೦೦೦</span>
+        </div>
+        <div class="flex justify-between border-b border-stone-200 pb-1 bg-blue-50 p-1">
+          <span class="font-bold text-blue-950">(ಈ) ಅಂತಿಮವಾಗಿ ಮಂಜೂರಾದ ನಿವೃತ್ತಿ ಉಪದಾನ (DCRG Sanctioned):</span>
+          <span class="font-mono-code font-bold text-blue-950 text-sm">${formatINR(calc.dcrgSanctioned)}</span>
+        </div>
+        <div class="text-[11px] text-stone-600">ಅಕ್ಷರಗಳಲ್ಲಿ: <strong>${numberToKannadaWords(calc.dcrgSanctioned)}</strong></div>
+      </div>
+    </div>
+
+    <!-- 3. COMMUTATION OF PENSION CALCULATION -->
+    <div class="mb-3 border border-stone-400">
+      <div class="bg-amber-800 text-white px-2 py-1 font-bold text-xs flex justify-between">
+        <span>೩. ಪಿಂಚಣಿ ಪರಿವರ್ತನೆ ಲೆಕ್ಕಾಚಾರ (COMMUTATION OF PENSION CALCULATION)</span>
+        <span class="text-[11px] font-normal">KCSR Appendix I / Commutation Factor</span>
+      </div>
+      <div class="p-2 space-y-1.5 text-xs">
+        <div class="flex justify-between border-b border-stone-200 pb-1">
+          <span>(ಅ) ಮಂಜೂರಾದ ಮೂಲ ಮಾಸಿಕ ಪಿಂಚಣಿ:</span>
+          <span class="font-mono-code font-bold">${formatINR(calc.basicServicePension)}</span>
+        </div>
+        <div class="flex justify-between border-b border-stone-200 pb-1">
+          <span>(ಆ) ಪರಿವರ್ತನೆಗೆ ಇಚ್ಛಿಸಿದ ಶೇಕಡಾವಾರು ಪ್ರಮಾಣ:</span>
+          <span class="font-mono-code font-bold">${record.commutationPercentage}% (ಗರಿಷ್ಠ ೪೦%)</span>
+        </div>
+        <div class="flex justify-between border-b border-stone-200 pb-1">
+          <span>(ಇ) ಪ್ರತಿ ತಿಂಗಳು ಪರಿವರ್ತನೆ ಮಾಡಲಾದ ಮೊತ್ತ (Commuted Portion):</span>
+          <span class="font-mono-code font-bold">${formatINR(calc.commutedPortion)} / ತಿಂಗಳಿಗೆ</span>
+        </div>
+        <div class="flex justify-between border-b border-stone-200 pb-1">
+          <span>(ಈ) ಮುಂದಿನ ಜನ್ಮದಿನದ ವಯಸ್ಸು & ಪರಿವರ್ತನಾ ಅಪವರ್ತನ (Factor for Age ${record.ageNextBirthday}):</span>
+          <span class="font-mono-code font-bold">${calc.commutationFactor}</span>
+        </div>
+        <div class="text-[11px] text-stone-600 bg-stone-50 p-1 rounded font-mono-code">
+          ಸೂತ್ರ: ಪರಿವರ್ತಿತ ಭಾಗ × ೧೨ × ಅಪವರ್ತನ = ${formatINR(calc.commutedPortion)} × ೧೨ × ${calc.commutationFactor} = <strong>${formatINR(calc.commutationLumpSum)}</strong>
+        </div>
+        <div class="flex justify-between border-b border-stone-200 pb-1 bg-amber-50 p-1">
+          <span class="font-bold text-amber-950">(ಉ) ಅಂತಿಮವಾಗಿ ಪಾವತಿಸಬೇಕಾದ ಪಿಂಚಣಿ ಪರಿವರ್ತನಾ ಗಂಟುಮೊತ್ತ:</span>
+          <span class="font-mono-code font-bold text-amber-950 text-sm">${formatINR(calc.commutationLumpSum)}</span>
+        </div>
+        <div class="flex justify-between text-[11px] text-stone-600 pt-0.5">
+          <span>ಪರಿವರ್ತನೆಯ ನಂತರ ಉಳಿಯುವ ಮಾಸಿಕ ಮೂಲ ಪಿಂಚಣಿ: <strong>${formatINR(calc.reducedMonthlyPension)}</strong></span>
+          <span>ಮರುಸ್ಥಾಪನೆ ಅವಧಿ (Restoration Period): <strong>೧೫ ವರ್ಷಗಳು</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. EARNED LEAVE (EL) ENCASHMENT CALCULATION -->
+    <div class="mb-3 border border-stone-400">
+      <div class="bg-purple-800 text-white px-2 py-1 font-bold text-xs flex justify-between">
+        <span>೪. ಗಳಿಕೆ ರಜೆ ನಗದೀಕರಣ ಲೆಕ್ಕಾಚಾರ (EARNED LEAVE & HPL ENCASHMENT CALCULATION)</span>
+        <span class="text-[11px] font-normal">KCSR (Leave) Rules / Max 300 Days</span>
+      </div>
+      <div class="p-2 space-y-1.5 text-xs">
+        <div class="flex justify-between border-b border-stone-200 pb-1">
+          <span>(ಅ) ರಜೆ ನಗದೀಕರಣಕ್ಕೆ ಪರಿಗಣಿಸಿದ ಮಾಸಿಕ ವೇತನ (ಮೂಲ ವೇತನ + ತುಟ್ಟಿಭತ್ಯೆ):</span>
+          <span class="font-mono-code font-bold">${formatINR(calc.lastBasicPay + calc.daAmount)}</span>
+        </div>
+        <div class="flex justify-between border-b border-stone-200 pb-1">
+          <span>(ಆ) ಒಂದು ದಿನದ ವೇತನ ದರ [(ಮೂಲ ವೇತನ + DA) ÷ ೩೦]:</span>
+          <span class="font-mono-code font-bold">${formatINR((calc.lastBasicPay + calc.daAmount) / 30)}</span>
+        </div>
+        <div class="flex justify-between border-b border-stone-200 pb-1">
+          <span>(ಇ) ನೌಕರರ ಖಾತೆಯಲ್ಲಿ ಶಿಲ್ಕಿರುವ ಅರ್ಹ ಗಳಿಕೆ ರಜೆ (EL Days - ಗರಿಷ್ಠ ೩೦೦ ದಿನಗಳು):</span>
+          <span class="font-mono-code font-bold">${calc.earnedLeaveDays} ದಿನಗಳು</span>
+        </div>
+        <div class="text-[11px] text-stone-600 bg-stone-50 p-1 rounded font-mono-code">
+          ಸೂತ್ರ: [(${formatINR(calc.lastBasicPay + calc.daAmount)}) ÷ ೩೦] × ${calc.earnedLeaveDays} ದಿನಗಳು = <strong>${formatINR(calc.leaveEncashmentAmount)}</strong>
+        </div>
+        ${calc.halfPayLeaveDays && calc.halfPayEncashmentAmount ? `
+        <div class="flex justify-between border-b border-stone-200 pb-1 text-stone-700">
+          <span>(ಈ) ಅರ್ಧ ವೇತನ ರಜೆ ನಗದೀಕರಣ (HPL Encashment: ${calc.halfPayLeaveDays} ದಿನಗಳು):</span>
+          <span class="font-mono-code font-bold">${formatINR(calc.halfPayEncashmentAmount)}</span>
+        </div>
+        ` : ''}
+        <div class="flex justify-between border-b border-stone-200 pb-1 bg-purple-50 p-1">
+          <span class="font-bold text-purple-950">(ಉ) ಅಂತಿಮವಾಗಿ ಮಂಜೂರಾದ ಒಟ್ಟು ಗಳಿಕೆ ರಜೆ ನಗದೀಕರಣ ಮೊತ್ತ:</span>
+          <span class="font-mono-code font-bold text-purple-950 text-sm">${formatINR(calc.totalLeaveEncashmentSanctioned || calc.leaveEncashmentAmount)}</span>
+        </div>
+        <div class="text-[11px] text-stone-600">ಅಕ್ಷರಗಳಲ್ಲಿ: <strong>${numberToKannadaWords(calc.totalLeaveEncashmentSanctioned || calc.leaveEncashmentAmount)}</strong></div>
+      </div>
+    </div>
+
+    <!-- GRAND TOTAL TERMINAL BENEFITS SUMMARY -->
+    <div class="mb-4 border-2 border-stone-900 bg-stone-900 text-white p-3 rounded">
+      <div class="text-xs font-bold uppercase tracking-wider mb-2 text-stone-200">
+        ಒಟ್ಟು ಅಂತಿಮ ನಿವೃತ್ತಿ ಗಂಟುಮೊತ್ತ ಸೌಲಭ್ಯಗಳ ಸಾರಾಂಶ (TERMINAL BENEFITS GRAND TOTAL SUMMARY)
+      </div>
+      <div class="grid grid-cols-3 gap-2 text-xs text-stone-100">
+        <div class="p-2 bg-stone-800 rounded">
+          <div class="text-[10px] text-stone-300">೧. ನಿವೃತ್ತಿ ಉಪದಾನ (DCRG):</div>
+          <div class="font-mono-code font-bold text-sm text-blue-200">${formatINR(calc.dcrgSanctioned)}</div>
+        </div>
+        <div class="p-2 bg-stone-800 rounded">
+          <div class="text-[10px] text-stone-300">೨. ಪಿಂಚಣಿ ಪರಿವರ್ತನೆ ಗಂಟುಮೊತ್ತ:</div>
+          <div class="font-mono-code font-bold text-sm text-amber-200">${formatINR(calc.commutationLumpSum)}</div>
+        </div>
+        <div class="p-2 bg-stone-800 rounded">
+          <div class="text-[10px] text-stone-300">೩. ಗಳಿಕೆ ರಜೆ ನಗದೀಕರಣ:</div>
+          <div class="font-mono-code font-bold text-sm text-purple-200">${formatINR(calc.totalLeaveEncashmentSanctioned || calc.leaveEncashmentAmount)}</div>
+        </div>
+      </div>
+      <div class="mt-3 pt-2 border-t border-stone-700 flex justify-between items-center">
+        <div class="font-bold text-sm">ಒಟ್ಟು ಅಂತಿಮ ನಿವೃತ್ತಿ ನಗದು ಮೊತ್ತ (GRAND TERMINAL TOTAL):</div>
+        <div class="font-mono-code font-bold text-lg text-emerald-300">${formatINR(calc.totalTerminalLumpSum)}</div>
+      </div>
+      <div class="text-[11px] text-stone-300 mt-1">
+        (${numberToKannadaWords(calc.totalTerminalLumpSum)})
+      </div>
+    </div>
+
+    <!-- CERTIFICATION & SIGNATURES -->
+    <div class="mt-6 flex justify-between items-end border-t border-stone-300 pt-3">
+      <div class="text-xs space-y-1">
+        <div><strong>ಲೆಕ್ಕಹಾಕಿದವರು:</strong> ಪ್ರಥಮ ದರ್ಜೆ ಸಹಾಯಕರು (FDA - ಪಿಂಚಣಿ)</div>
+        <div><strong>ಪರಿಶೀಲಿಸಿದವರು:</strong> ಕಛೇರಿ ಅಧೀಕ್ಷಕರು (OS)</div>
+        <div class="text-[11px] text-stone-600 mt-2">ಸ್ಥಳ: ಭದ್ರಾವತಿ | ದಿನಾಂಕ: ${record.dor || new Date().toISOString().split('T')[0]}</div>
+      </div>
+      <div class="text-center">
+        <div class="font-bold text-xs">${office.officerName}</div>
+        <div class="text-[11px] text-stone-700">${office.officerDesignation}</div>
+        <div class="text-[10px] text-stone-600">${office.officeName}</div>
+        <div class="text-[9px] text-stone-500 font-mono-code mt-0.5">[ಮಂಜೂರಾತಿ ಪ್ರಾಧಿಕಾರದ ಸಹಿ & ಮೊಹರು]</div>
+      </div>
+    </div>
+  </div>
+  `;
+}
+
+/**
+ * 10. RETIREMENT GRATUITY (DCRG) SANCTION ORDER (ನಿವೃತ್ತಿ ಉಪದಾನ ಮಂಜೂರಾತಿ ಆದೇಶ)
+ */
+export function generateGratuitySanctionOrderHtml(record: PensionCaseRecord, office: OfficeConfig = DEFAULT_PENSION_OFFICE_CONFIG): string {
+  const calc = record.calculation;
+  return `
+  <div class="karnataka-govt-document gratuity-order-container p-6 bg-white text-stone-900 font-kannada text-xs leading-relaxed max-w-[800px] mx-auto border border-stone-300">
+    <div class="text-center pb-2 border-b-2 border-stone-800">
+      <div class="font-bold text-xs tracking-wide">ಕರ್ನಾಟಕ ಸರ್ಕಾರ - ಶಾಲಾ ಶಿಕ್ಷಣ ಮತ್ತು ಸಾಕ್ಷರತಾ ಇಲಾಖೆ</div>
+      <div class="font-bold text-sm text-stone-950 mt-0.5">${office.officeName}</div>
+      <div class="text-xs text-stone-700">ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು, ಶಿವಮೊಗ್ಗ ಜಿಲ್ಲೆ</div>
+      <div class="font-bold text-sm text-stone-950 mt-2 underline">
+        ನಿವೃತ್ತಿ ಉಪದಾನ (DCRG) ಮಂಜೂರಾತಿ ಆದೇಶ (RETIREMENT GRATUITY SANCTION ORDER)
+      </div>
+    </div>
+
+    <div class="flex justify-between items-center my-3 text-xs font-mono-code">
+      <div><strong>ಆದೇಶ ಸಂ:</strong> ${office.orderPrefix}/${record.kgidNumber}/DCRG/2026-27</div>
+      <div><strong>ದಿನಾಂಕ:</strong> ${record.dor || new Date().toISOString().split('T')[0]}</div>
+    </div>
+
+    <div class="p-2 bg-stone-100 border border-stone-300 font-bold text-xs text-center my-3">
+      ವಿಷಯ: ಶ್ರೀ/ಶ್ರೀಮತಿ ${record.employeeName}, ${record.designation}, ಇವರಿಗೆ ನಿವೃತ್ತಿ ಉಪದಾನ (DCRG) ಮಂಜೂರು ಮಾಡುವ ಬಗ್ಗೆ.<br/>
+      ಉಲ್ಲೇಖ: ೧. ಕರ್ನಾಟಕ ನಾಗರಿಕ ಸೇವಾ ನಿಯಮಾವಳಿಗಳು (KCSR) ನಿಯಮ ೨೯೨.<br/>
+      ೨. ನೌಕರರ ನಿವೃತ್ತಿ ಅರ್ಜಿ ದಿನಾಂಕ: ${record.dor}.
+    </div>
+
+    <div class="space-y-3 text-justify text-xs leading-relaxed">
+      <div class="font-bold underline text-xs">ಪ್ರಸ್ತಾವನೆ:</div>
+      <p>
+        ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕಿನ ${record.officeOrSchool} ದಲ್ಲಿ ${record.designation} ಆಗಿ ಸೇವೆ ಸಲ್ಲಿಸುತ್ತಿರುವ ಶ್ರೀ/ಶ್ರೀಮತಿ <strong>${record.employeeName}</strong>,
+        ಕೆ.ಜಿ.ಐ.ಡಿ ಸಂಖ್ಯೆ: <strong>${record.kgidNumber}</strong> ಇವರು ದಿನಾಂಕ <strong>${record.doa}</strong> ರಂದು ಸೇವೆಗೆ ಪ್ರವೇಶಿಸಿ,
+        ದಿನಾಂಕ <strong>${record.dor}</strong> ರಂದು ಸೇವೆಯಿಂದ ವಯೋನಿವೃತ್ತಿ (${calc.retirementAgeYears || 60} ವರ್ಷಗಳು) ಹೊಂದುತ್ತಿದ್ದಾರೆ.
+        ನೌಕರರ ಮೂಲ ಸೇವಾ ಪುಸ್ತಕವನ್ನು ಪರಿಶೀಲಿಸಲಾಗಿದ್ದು, ಒಟ್ಟು ಅರ್ಹತಾ ಸೇವೆ <strong>${calc.netQualifyingYears} ವರ್ಷ, ${calc.netQualifyingMonths} ತಿಂಗಳು</strong>
+        ಹಾಗೂ <strong>${calc.qualifyingHalfYears} ಅರ್ಧವಾರ್ಷಿಕ ಅವಧಿಗಳು</strong> ಎಂದು ದೃಢಪಟ್ಟಿದೆ.
+      </p>
+
+      <div class="font-bold underline text-xs pt-1">ಆದೇಶ:</div>
+      <p>
+        ಪ್ರಸ್ತಾವನೆಯಲ್ಲಿ ವಿವರಿಸಿರುವ ಅಂಶಗಳ ಹಿನ್ನೆಲೆಯಲ್ಲಿ ಹಾಗೂ ಕರ್ನಾಟಕ ನಾಗರಿಕ ಸೇವಾ ನಿಯಮಾವಳಿಗಳ (KCSR) ಅನ್ವಯ,
+        ಶ್ರೀ/ಶ್ರೀಮತಿ <strong>${record.employeeName}</strong>, ${record.designation} ಇವರಿಗೆ ಶಾಸನಬದ್ಧವಾಗಿ ಅರ್ಹವಾದ
+        ನಿವೃತ್ತಿ ಉಪದಾನ (DCRG) ಮೊತ್ತ <strong>${formatINR(calc.dcrgSanctioned)}</strong> (${numberToKannadaWords(calc.dcrgSanctioned)})
+        ಗಳನ್ನು ಮಂಜೂರು ಮಾಡಿ ಆದೇಶಿಸಲಾಗಿದೆ.
+      </p>
+
+      <table class="w-full border-collapse border border-stone-400 text-xs my-2">
+        <tr class="bg-stone-100 font-bold">
+          <td class="border border-stone-400 p-1.5 w-1/2">ಕೊನೆಯ ತಿಂಗಳ ವೇತನ + DA</td>
+          <td class="border border-stone-400 p-1.5 font-mono-code">${formatINR(calc.lastBasicPay + calc.daAmount)}</td>
+        </tr>
+        <tr>
+          <td class="border border-stone-400 p-1.5">ಅರ್ಹತಾ ಅರ್ಧವಾರ್ಷಿಕ ಅವಧಿಗಳು</td>
+          <td class="border border-stone-400 p-1.5 font-mono-code">${calc.qualifyingHalfYears}</td>
+        </tr>
+        <tr>
+          <td class="border border-stone-400 p-1.5">ಲೆಕ್ಕಹಾಕಲಾದ ಉಪದಾನ ಸೂತ್ರ</td>
+          <td class="border border-stone-400 p-1.5 font-mono-code">[${formatINR(calc.lastBasicPay + calc.daAmount)} ÷ ೪] × ${calc.qualifyingHalfYears}</td>
+        </tr>
+        <tr class="bg-blue-50 font-bold text-blue-950">
+          <td class="border border-stone-400 p-1.5">ಅಂತಿಮ ಮಂಜೂರಾದ ನಿವೃತ್ತಿ ಉಪದಾನ</td>
+          <td class="border border-stone-400 p-1.5 font-mono-code text-sm">${formatINR(calc.dcrgSanctioned)}</td>
+        </tr>
+      </table>
+
+      <p class="pt-1">
+        ಸದರಿ ಮೊತ್ತವನ್ನು ಸಂಬಂಧಪಟ್ಟ ಉಪ ಖಜಾನೆ, ಭದ್ರಾವತಿ ಮುಖಾಂತರ ನೌಕರರ ಬ್ಯಾಂಕ್ ಖಾತೆ (ಖಾತೆ ಸಂ: ${record.bankAccountNo}, ${record.bankName}) ಗೆ
+        ಜಮೆ ಮಾಡಲು ಕ್ರಮವಹಿಸತಕ್ಕದ್ದು.
+      </p>
+    </div>
+
+    <div class="mt-8 flex justify-between items-end">
+      <div class="text-xs text-stone-600">
+        ಸ್ಥಳ: ಭದ್ರಾವತಿ<br/>
+        ದಿನಾಂಕ: ${record.dor || new Date().toISOString().split('T')[0]}
+      </div>
+      <div class="text-center">
+        <div class="font-bold text-xs">${office.officerName}</div>
+        <div class="text-[11px] text-stone-700">${office.officerDesignation}</div>
+        <div class="text-[10px] text-stone-600">${office.officeName}</div>
+      </div>
+    </div>
+  </div>
+  `;
+}
+
+/**
+ * 11. EARNED LEAVE ENCASHMENT SANCTION ORDER (ಗಳಿಕೆ ರಜೆ ನಗದೀಕರಣ ಮಂಜೂರಾತಿ ಆದೇಶ)
+ */
+export function generateLeaveEncashmentSanctionOrderHtml(record: PensionCaseRecord, office: OfficeConfig = DEFAULT_PENSION_OFFICE_CONFIG): string {
+  const calc = record.calculation;
+  const sanctionedAmount = calc.totalLeaveEncashmentSanctioned || calc.leaveEncashmentAmount;
+  return `
+  <div class="karnataka-govt-document el-order-container p-6 bg-white text-stone-900 font-kannada text-xs leading-relaxed max-w-[800px] mx-auto border border-stone-300">
+    <div class="text-center pb-2 border-b-2 border-stone-800">
+      <div class="font-bold text-xs tracking-wide">ಕರ್ನಾಟಕ ಸರ್ಕಾರ - ಶಾಲಾ ಶಿಕ್ಷಣ ಮತ್ತು ಸಾಕ್ಷರತಾ ಇಲಾಖೆ</div>
+      <div class="font-bold text-sm text-stone-950 mt-0.5">${office.officeName}</div>
+      <div class="text-xs text-stone-700">ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು, ಶಿವಮೊಗ್ಗ ಜಿಲ್ಲೆ</div>
+      <div class="font-bold text-sm text-stone-950 mt-2 underline">
+        ಗಳಿಕೆ ರಜೆ ನಗದೀಕರಣ ಮಂಜೂರಾತಿ ಆದೇಶ (EARNED LEAVE ENCASHMENT SANCTION ORDER)
+      </div>
+    </div>
+
+    <div class="flex justify-between items-center my-3 text-xs font-mono-code">
+      <div><strong>ಆದೇಶ ಸಂ:</strong> ${office.orderPrefix}/${record.kgidNumber}/ಗಳಿಕೆ-ರಜೆ/2026-27</div>
+      <div><strong>ದಿನಾಂಕ:</strong> ${record.dor || new Date().toISOString().split('T')[0]}</div>
+    </div>
+
+    <div class="p-2 bg-stone-100 border border-stone-300 font-bold text-xs text-center my-3">
+      ವಿಷಯ: ಶ್ರೀ/ಶ್ರೀಮತಿ ${record.employeeName}, ${record.designation}, ಇವರ ನಿವೃತ್ತಿ ಹೊಂದುತ್ತಿರುವ ಹಿನ್ನೆಲೆಯಲ್ಲಿ ಉಳಿದಿರುವ ಗಳಿಕೆ ರಜೆಯನ್ನು ನಗದೀಕರಿಸಲು ಮಂಜೂರಾತಿ ನೀಡುವ ಬಗ್ಗೆ.<br/>
+      ಉಲ್ಲೇಖ: ೧. ಕರ್ನಾಟಕ ನಾಗರಿಕ ಸೇವಾ (ರಜೆ) ನಿಯಮಾವಳಿಗಳು.<br/>
+      ೨. ಸರ್ಕಾರಿ ಆದೇಶ ಸಂಖ್ಯೆ: ಎಫ್‌ಡಿ ೦೫ ಎಸ್‌ಆರ್‌ಎಸ್ ೨೦೧೨, ದಿನಾಂಕ: ೧೪-೦೬-೨೦೧೨ (ಗರಿಷ್ಠ ೩೦೦ ದಿನಗಳ ಮಿತಿ).
+    </div>
+
+    <div class="space-y-3 text-justify text-xs leading-relaxed">
+      <p>
+        ದಿನಾಂಕ <strong>${record.dor}</strong> ರಂದು ಸೇವೆಯಿಂದ ನಿವೃತ್ತಿ ಹೊಂದುತ್ತಿರುವ ಶ್ರೀ/ಶ್ರೀಮತಿ <strong>${record.employeeName}</strong>,
+        ${record.designation}, ${record.officeOrSchool}, ಇವರ ಸೇವಾ ಪುಸ್ತಕದಲ್ಲಿ ನಮೂದಿಸಲಾದ ರಜೆ ಲೆಕ್ಕಪತ್ರವನ್ನು ಪರಿಶೀಲಿಸಲಾಗಿ,
+        ಇವರ ಖಾತೆಯಲ್ಲಿ <strong>${calc.earnedLeaveDays} ದಿನಗಳ ಗಳಿಕೆ ರಜೆ (Earned Leave)</strong> ಶಿಲ್ಕಿರುವುದು ದೃಢಪಟ್ಟಿದೆ.
+      </p>
+
+      <div class="font-bold underline text-xs pt-1">ಆದೇಶ:</div>
+      <p>
+        ಸರ್ಕಾರದ ನಿಯಮಾವಳಿಗಳನ್ವಯ, ಶ್ರೀ/ಶ್ರೀಮತಿ <strong>${record.employeeName}</strong>, ${record.designation} ಇವರಿಗೆ
+        ಖಾತೆಯಲ್ಲಿ ಶಿಲ್ಕಿರುವ <strong>${calc.earnedLeaveDays} ದಿನಗಳ ಗಳಿಕೆ ರಜೆಯನ್ನು ನಗದೀಕರಿಸಿ</strong> ಒಟ್ಟು
+        <strong>${formatINR(sanctionedAmount)}</strong> (${numberToKannadaWords(sanctionedAmount)})
+        ಗಳನ್ನು ಮಂಜೂರು ಮಾಡಿ ಆದೇಶಿಸಲಾಗಿದೆ.
+      </p>
+
+      <table class="w-full border-collapse border border-stone-400 text-xs my-2">
+        <tr class="bg-stone-100">
+          <td class="border border-stone-400 p-1.5 w-1/2">ಕೊನೆಯ ತಿಂಗಳ ವೇತನ + DA</td>
+          <td class="border border-stone-400 p-1.5 font-bold font-mono-code">${formatINR(calc.lastBasicPay + calc.daAmount)}</td>
+        </tr>
+        <tr>
+          <td class="border border-stone-400 p-1.5">ಒಂದು ದಿನದ ವೇತನ ದರ [(Basic + DA) ÷ ೩೦]</td>
+          <td class="border border-stone-400 p-1.5 font-mono-code">${formatINR((calc.lastBasicPay + calc.daAmount) / 30)}</td>
+        </tr>
+        <tr>
+          <td class="border border-stone-400 p-1.5">ಶಿಲ್ಕಿರುವ ಗಳಿಕೆ ರಜೆ ದಿನಗಳು</td>
+          <td class="border border-stone-400 p-1.5 font-bold font-mono-code">${calc.earnedLeaveDays} ದಿನಗಳು (ಮಿತಿ: ೩೦೦)</td>
+        </tr>
+        <tr class="bg-purple-50 font-bold text-purple-950">
+          <td class="border border-stone-400 p-1.5">ಒಟ್ಟು ಮಂಜೂರಾದ ರಜೆ ನಗದೀಕರಣ ಮೊತ್ತ</td>
+          <td class="border border-stone-400 p-1.5 font-mono-code text-sm">${formatINR(sanctionedAmount)}</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="mt-8 flex justify-between items-end">
+      <div class="text-xs text-stone-600">
+        ಸ್ಥಳ: ಭದ್ರಾವತಿ<br/>
+        ದಿನಾಂಕ: ${record.dor || new Date().toISOString().split('T')[0]}
+      </div>
+      <div class="text-center">
+        <div class="font-bold text-xs">${office.officerName}</div>
+        <div class="text-[11px] text-stone-700">${office.officerDesignation}</div>
+        <div class="text-[10px] text-stone-600">${office.officeName}</div>
+      </div>
+    </div>
+  </div>
+  `;
+}
+
+/**
+ * 12. SERVICE VERIFICATION CERTIFICATE (ಸೇವಾ ಪರಿಶೀಲನಾ ಪ್ರಮಾಣಪತ್ರ)
+ */
+export function generateServiceVerificationCertificateHtml(record: PensionCaseRecord, office: OfficeConfig = DEFAULT_PENSION_OFFICE_CONFIG): string {
+  const calc = record.calculation;
+  return `
+  <div class="karnataka-govt-document svc-container p-6 bg-white text-stone-900 font-kannada text-xs leading-relaxed max-w-[800px] mx-auto border border-stone-300">
+    <div class="text-center pb-2 border-b-2 border-stone-800">
+      <div class="font-bold text-xs tracking-wide">ಕರ್ನಾಟಕ ಸರ್ಕಾರ - ಶಾಲಾ ಶಿಕ್ಷಣ ಮತ್ತು ಸಾಕ್ಷರತಾ ಇಲಾಖೆ</div>
+      <div class="font-bold text-sm text-stone-950 mt-0.5">${office.officeName}</div>
+      <div class="text-xs text-stone-700">ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು, ಶಿವಮೊಗ್ಗ ಜಿಲ್ಲೆ</div>
+      <div class="font-bold text-sm text-stone-950 mt-2 underline">
+        ಸೇವಾ ಪರಿಶೀಲನಾ ಪ್ರಮಾಣಪತ್ರ (QUALIFYING SERVICE VERIFICATION CERTIFICATE)
+      </div>
+    </div>
+
+    <div class="flex justify-between items-center my-3 text-xs font-mono-code">
+      <div><strong>ಸಂ:</strong> ${office.orderPrefix}/${record.kgidNumber}/ಸೇವಾ-ಪರಿಶೀಲನೆ/2026-27</div>
+      <div><strong>ದಿನಾಂಕ:</strong> ${record.dor || new Date().toISOString().split('T')[0]}</div>
+    </div>
+
+    <div class="space-y-3 text-justify text-xs leading-relaxed">
+      <p>
+        ಶ್ರೀ/ಶ್ರೀಮತಿ <strong>${record.employeeName}</strong>, ಹುದ್ದೆ: <strong>${record.designation}</strong>,
+        ಕೆ.ಜಿ.ಐ.ಡಿ ಸಂಖ್ಯೆ: <strong>${record.kgidNumber}</strong>, ಇವರ ಮೂಲ ಸೇವಾ ಪುಸ್ತಕವನ್ನು ಕೂಲಂಕಷವಾಗಿ ಪರಿಶೀಲಿಸಲಾಗಿದ್ದು,
+        ದಿನಾಂಕ <strong>${record.doa}</strong> ರಿಂದ ದಿನಾಂಕ <strong>${record.dor}</strong> ರವರೆಗೆ ಸಲ್ಲಿಸಲಾದ ಸೇವೆಯು
+        ಕರ್ನಾಟಕ ನಾಗರಿಕ ಸೇವಾ ನಿಯಮಾವಳಿಗಳ (KCSR) ಅನ್ವಯ ಪಿಂಚಣಿಗೆ ಅರ್ಹವಾದ ಸೇವೆಯಾಗಿರುತ್ತದೆ ಎಂದು ಈ ಮೂಲಕ ದೃಢೀಕರಿಸಿ ಪ್ರಮಾಣೀಕರಿಸಲಾಗಿದೆ.
+      </p>
+
+      <table class="w-full border-collapse border border-stone-400 text-xs my-2">
+        <tr>
+          <td class="border border-stone-400 p-1.5 w-1/2 bg-stone-50">೧. ಒಟ್ಟು ಸೇವಾವಧಿ (Gross Service)</td>
+          <td class="border border-stone-400 p-1.5 font-bold">${calc.grossYears} ವರ್ಷ, ${calc.grossMonths} ತಿಂಗಳು, ${calc.grossDays} ದಿನಗಳು</td>
+        </tr>
+        <tr>
+          <td class="border border-stone-400 p-1.5 bg-stone-50">೨. ಅನರ್ಹತಾ ಸೇವೆ (EOL / Dies-non)</td>
+          <td class="border border-stone-400 p-1.5">${calc.nonQualifyingDays} ದಿನಗಳು</td>
+        </tr>
+        <tr class="bg-amber-50">
+          <td class="border border-stone-400 p-1.5 font-bold">೩. ನಿವ್ವಳ ಅರ್ಹತಾ ಸೇವೆ (Net Qualifying Service)</td>
+          <td class="border border-stone-400 p-1.5 font-bold text-emerald-900">
+            ${calc.netQualifyingYears} ವರ್ಷ, ${calc.netQualifyingMonths} ತಿಂಗಳು, ${calc.netQualifyingDays} ದಿನಗಳು (${calc.qualifyingHalfYears} ಅರ್ಧವಾರ್ಷಿಕ ಅವಧಿಗಳು)
+          </td>
+        </tr>
+        <tr>
+          <td class="border border-stone-400 p-1.5 bg-stone-50">೪. ವಯೋನಿವೃತ್ತಿ ಪರಿಶೀಲನೆ</td>
+          <td class="border border-stone-400 p-1.5 font-bold">${calc.retirementAgeYears || 60} ವರ್ಷಗಳ ಪೂರ್ಣಾವಧಿ</td>
+        </tr>
+      </table>
+
+      <p class="pt-1">
+        ಸದರಿ ನೌಕರರ ಯಾವುದೇ ಸೇವಾ ಅವಧಿಯು ವಿವಾದಿತವಾಗಿರುವುದಿಲ್ಲ ಹಾಗೂ ವೇತನ ಬಡ್ತಿ ಮತ್ತು ರಜೆಗಳು ಕ್ರಮಬದ್ಧವಾಗಿರುತ್ತವೆ ಎಂದು ಪ್ರಮಾಣೀಕರಿಸಲಾಗಿದೆ.
+      </p>
+    </div>
+
+    <div class="mt-8 flex justify-between items-end">
+      <div class="text-xs text-stone-600">
+        ಸ್ಥಳ: ಭದ್ರಾವತಿ<br/>
+        ದಿನಾಂಕ: ${record.dor || new Date().toISOString().split('T')[0]}
+      </div>
+      <div class="text-center">
+        <div class="font-bold text-xs">${office.officerName}</div>
+        <div class="text-[11px] text-stone-700">${office.officerDesignation}</div>
+        <div class="text-[10px] text-stone-600">${office.officeName}</div>
+      </div>
+    </div>
+  </div>
+  `;
+}
+
+/**
  * Universal dispatcher for any Pension Format Letter.
  */
 export function renderPensionFormatHtml(
@@ -1191,6 +1814,8 @@ export function renderPensionFormatHtml(
   office: OfficeConfig = DEFAULT_PENSION_OFFICE_CONFIG
 ): string {
   switch (formatType) {
+    case 'pension_calc_sheet':
+      return generatePensionCalculationSheetHtml(record, office);
     case 'form7':
       return generateForm7Html(record, office);
     case 'form1_2':
@@ -1199,15 +1824,21 @@ export function renderPensionFormatHtml(
       return generateForm6Html(record, office);
     case 'sanction_order':
       return generateSanctionOrderHtml(record, office);
-    case 'provisional_order':
-      return generateProvisionalSanctionOrderHtml(record, office);
+    case 'gratuity_order':
+      return generateGratuitySanctionOrderHtml(record, office);
     case 'commutation_order':
       return generateCommutationOrderHtml(record, office);
+    case 'el_encashment_order':
+      return generateLeaveEncashmentSanctionOrderHtml(record, office);
+    case 'service_verification_cert':
+      return generateServiceVerificationCertificateHtml(record, office);
+    case 'provisional_order':
+      return generateProvisionalSanctionOrderHtml(record, office);
     case 'ag_forwarding':
       return generateAgForwardingLetterHtml(record, office);
     case 'no_dues_cert':
       return generateNoDuesCertificateHtml(record, office);
     default:
-      return generateForm7Html(record, office);
+      return generatePensionCalculationSheetHtml(record, office);
   }
 }

@@ -41,6 +41,9 @@ interface DeptHeaderProps {
   employeesCount?: number;
   currentUser?: AdminAuthUser | null;
   onLogout?: () => void;
+  onOpenUserManagement?: () => void;
+  onOpenAiChat?: () => void;
+  userSlotsCount?: number;
 }
 
 export const DeptHeader: React.FC<DeptHeaderProps> = ({
@@ -56,6 +59,9 @@ export const DeptHeader: React.FC<DeptHeaderProps> = ({
   employeesCount = 0,
   currentUser,
   onLogout,
+  onOpenUserManagement,
+  onOpenAiChat,
+  userSlotsCount = 5,
 }) => {
   return (
     <header className="bg-[#fffbf2] border-b-[2.5px] border-[#2b2b2b] sticky top-0 z-30 shadow-[0_4px_0_rgba(43,43,43,0.06)]">
@@ -93,10 +99,10 @@ export const DeptHeader: React.FC<DeptHeaderProps> = ({
             )}
             <button
               onClick={onResetDemo}
-              className="text-[10px] text-amber-300 hover:text-white underline ml-1 flex items-center gap-1 cursor-pointer font-sans"
-              title="Reset records to official department seed data"
+              className="text-[10px] text-emerald-300 hover:text-white underline ml-1 flex items-center gap-1 cursor-pointer font-sans"
+              title="ಕಛೇರಿ ಸಿಬ್ಬಂದಿ ಮತ್ತು ಕಡತಗಳ ಡೇಟಾ ಸಿಂಕ್ (Sync Official Data)"
             >
-              <RotateCcw className="w-2.5 h-2.5" /> ಮಾದರಿ ಡೇಟಾ
+              <RotateCcw className="w-2.5 h-2.5" /> ಡೇಟಾ ಸಿಂಕ್
             </button>
           </div>
         </div>
@@ -179,18 +185,52 @@ export const DeptHeader: React.FC<DeptHeaderProps> = ({
               <span>🔍 ಕಡತ ಆಡಿಟ್</span>
             </button>
 
-            {/* Admin User Chip & Logout */}
-            <div className="hidden sm:flex items-center gap-1.5 pl-2 border-l-2 border-[#2b2b2b]">
-              <div 
-                className="flex items-center gap-1.5 px-2.5 py-1 bg-white border-2 border-[#2b2b2b] rounded-lg text-xs shadow-[2px_2px_0px_#2b2b2b]"
-                title="Logged in as Authorized System Administrator"
+            {/* AI Assistant Button (Gemini 3.8 Flash) */}
+            {onOpenAiChat && (
+              <button
+                id="btn-quick-ai-assistant"
+                onClick={onOpenAiChat}
+                className="px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-purple-800 to-indigo-900 hover:from-purple-700 hover:to-indigo-800 rounded-lg transition-all inline-flex items-center gap-1.5 border-2 border-[#2b2b2b] shadow-[3px_3px_0px_#c084fc] hover:shadow-[4px_4px_0px_#c084fc] hover:-translate-x-0.5 hover:-translate-y-0.5 cursor-pointer font-kannada"
+                title="KCSR & RTI AI ಸಹಾಯಕ (Gemini 3.8 Flash)"
               >
-                <div className="w-5 h-5 rounded-full bg-[#2b2b2b] text-[#f59e0b] font-bold flex items-center justify-center text-[10px] font-mono-code">
-                  A
+                <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                <span>🤖 AI ಸಹಾಯಕ</span>
+              </button>
+            )}
+
+            {/* 5 Users Management & Registration Button */}
+            {onOpenUserManagement && (
+              <button
+                id="btn-quick-manage-users"
+                onClick={onOpenUserManagement}
+                className="hidden sm:inline-flex px-3 py-1.5 text-xs font-bold text-[#2b2b2b] bg-sky-100 hover:bg-sky-200 rounded-lg transition-all items-center gap-1.5 border-2 border-[#2b2b2b] shadow-[3px_3px_0px_#2b2b2b] hover:-translate-x-0.5 hover:-translate-y-0.5 cursor-pointer font-kannada"
+                title="ಕಛೇರಿ ೫ ಅಧಿಕೃತ ಬಳಕೆದಾರರ ನಿರ್ವಹಣೆ ಮತ್ತು ನೋಂದಣಿ (5 Users Limit)"
+              >
+                <Users className="w-3.5 h-3.5 text-sky-700" />
+                <span>👥 ಬಳಕೆದಾರರು</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#2b2b2b] text-[#f59e0b] font-mono-code font-bold">
+                  {userSlotsCount}/5
+                </span>
+              </button>
+            )}
+
+            {/* Active User Profile & Logout */}
+            <div className="flex items-center gap-1.5 pl-2 border-l-2 border-[#2b2b2b]">
+              <div 
+                onClick={onOpenUserManagement}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-white border-2 border-[#2b2b2b] rounded-lg text-xs shadow-[2px_2px_0px_#2b2b2b] cursor-pointer hover:bg-amber-50/60"
+                title="ಪ್ರಸ್ತುತ ಲಾಗಿನ್ ಆಗಿರುವ ನೌಕರರು (ಕ್ಲಿಕ್ ಮಾಡಿ ಬಳಕೆದಾರರನ್ನು ಬದಲಿಸಿ)"
+              >
+                <div className="w-5 h-5 rounded-full bg-[#2b2b2b] text-[#f59e0b] font-bold flex items-center justify-center text-[10px] font-mono-code shrink-0">
+                  {currentUser?.displayName ? currentUser.displayName.charAt(0) : 'U'}
                 </div>
-                <div className="leading-tight">
-                  <span className="font-bold text-[#2b2b2b] block text-[11px] font-mono-code">admin</span>
-                  <span className="text-[9px] text-stone-500 block uppercase font-mono-code font-bold">SYSTEM ADMIN</span>
+                <div className="leading-tight text-left max-w-[130px] sm:max-w-[160px] truncate">
+                  <span className="font-bold text-[#2b2b2b] block text-[11px] truncate font-kannada">
+                    {currentUser?.displayName || currentUser?.username || 'admin'}
+                  </span>
+                  <span className="text-[9px] text-stone-500 block uppercase font-mono-code font-bold truncate">
+                    {currentUser?.role || 'SYSTEM ADMIN'}
+                  </span>
                 </div>
               </div>
 
@@ -199,7 +239,7 @@ export const DeptHeader: React.FC<DeptHeaderProps> = ({
                   id="btn-admin-logout"
                   onClick={onLogout}
                   className="p-1.5 text-[#2b2b2b] hover:text-rose-700 bg-white hover:bg-rose-50 rounded-lg transition-all border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#2b2b2b] cursor-pointer"
-                  title="ನಿರ್ಗಮಿಸಿ (Logout Admin)"
+                  title="ನಿರ್ಗಮಿಸಿ (Logout)"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
@@ -444,6 +484,21 @@ export const DeptHeader: React.FC<DeptHeaderProps> = ({
               <ShieldCheck className="w-3.5 h-3.5 text-amber-800" />
               <span>೧೦. ಕಡತ ಆಡಿಟ್</span>
             </button>
+
+            {/* 11. ಮಾಹಿತಿ ಹಕ್ಕು ಪತ್ರ ವ್ಯವಹಾರಗಳು & ನಿರ್ವಹಣೆ (RTI Management & Correspondence) */}
+            <button
+              id="nav-tab-rti-management"
+              onClick={() => setActiveTab('rti')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'rti'
+                  ? 'bg-[#f59e0b] text-[#2b2b2b] shadow-[3px_3px_0px_#2b2b2b] -translate-y-0.5'
+                  : 'bg-amber-100 text-[#2b2b2b] hover:bg-amber-200 shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+              title="ಮಾಹಿತಿ ಹಕ್ಕು ಅಧಿನಿಯಮ ೨೦೦೫: ಅರ್ಜಿ ನೋಂದಣಿ, ೩೦-ದಿನಗಳ SLA ಗಡುವು, ವರ್ಗಾವಣೆ ೬(೩), ಉತ್ತರ ಪತ್ರಗಳು & ಮೇಲ್ಮನವಿಗಳು"
+            >
+              <FileCheck2 className="w-3.5 h-3.5 text-[#2b2b2b]" />
+              <span>೧೧. ಮಾಹಿತಿ ಹಕ್ಕು (RTI)</span>
+            </button>
           </div>
 
           {/* Secondary Hub for Correspondence & RTI */}
@@ -470,10 +525,10 @@ export const DeptHeader: React.FC<DeptHeaderProps> = ({
                   ? 'bg-[#f59e0b] text-[#2b2b2b] shadow-[2.5px_2.5px_0px_#2b2b2b]'
                   : 'bg-amber-100 text-[#2b2b2b] hover:bg-amber-200 shadow-[2px_2px_0px_#2b2b2b]'
               }`}
-              title="ಮಾಹಿತಿ ಹಕ್ಕು ಕಡತಗಳು & ಉತ್ತರ ತಯಾರಿಕೆ"
+              title="ಮಾಹಿತಿ ಹಕ್ಕು ಪತ್ರ ವ್ಯವಹಾರಗಳು & ನಿರ್ವಹಣೆ (RTI Act 2005)"
             >
               <FileCheck2 className="w-3.5 h-3.5 text-[#2b2b2b]" />
-              <span>RTI ಕಡತಗಳು</span>
+              <span>⚖️ RTI ಪತ್ರ ವ್ಯವಹಾರ</span>
             </button>
           </div>
         </div>

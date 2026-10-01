@@ -64,9 +64,63 @@
         "timestamp": { "type": "string" }
       },
       "required": ["id", "action", "timestamp"]
+    },
+    "userProfile": {
+      "title": "User Profile",
+      "description": "Authorized department user profile (strictly max 5 registered users)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string" },
+        "designation": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "displayName", "role"]
+    },
+    "rtiCase": {
+      "title": "RTI Case",
+      "description": "Right to Information application and correspondence record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "applicationNumber": { "type": "string" },
+        "applicantName": { "type": "string" },
+        "subject": { "type": "string" },
+        "status": { "type": "string" },
+        "receivedDate": { "type": "string" }
+      },
+      "required": ["id", "applicationNumber", "applicantName", "subject"]
+    },
+    "pensionCase": {
+      "title": "Pension Case",
+      "description": "Pension settlement and retirement benefit case record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "caseNumber": { "type": "string" },
+        "employeeName": { "type": "string" },
+        "kgidNumber": { "type": "string" },
+        "dor": { "type": "string" }
+      },
+      "required": ["id", "caseNumber", "employeeName"]
     }
   },
   "firestore": {
+    "/users/{userId}": {
+      "schema": "userProfile",
+      "description": "Collection of authorized users (max 5 registered users)"
+    },
+    "/rtiCases/{caseId}": {
+      "schema": "rtiCase",
+      "description": "Collection of Right to Information applications and correspondence"
+    },
+    "/pensionCases/{caseId}": {
+      "schema": "pensionCase",
+      "description": "Collection of pension calculation and retirement cases"
+    },
     "/docketFiles/{fileId}": {
       "schema": "docketFile",
       "description": "Collection of master docket files"

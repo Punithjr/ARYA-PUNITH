@@ -162,6 +162,14 @@ export const OfficialLetterStudio: React.FC<OfficialLetterStudioProps> = ({
   onSaveToRegistry,
   prefilledLetter,
 }) => {
+  // Dynamic DDO Signatory from isDdo flag in employees list
+  const ddoEmp = employees?.find(e => e.isDdo === true) || 
+                 employees?.find(e => e.designation?.toLowerCase().includes('ddo')) ||
+                 employees?.find(e => e.designation?.includes('ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿ'));
+  const fallbackSignatoryName = ddoEmp?.fullName || 'ಹೆಚ್. ರವಿಕುಮಾರ್';
+  const fallbackSignatoryDesig = ddoEmp?.designation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ';
+  const fallbackSignatoryOffice = ddoEmp?.placeOfWork || ddoEmp?.officeLocation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು';
+
   // Navigation Steps: 1: Upload, 2: OCR Review, 3: Letter Type & Prompt, 4: Live Editor & Preview
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [empSearchFilter, setEmpSearchFilter] = useState<string>('');
@@ -365,7 +373,7 @@ export const OfficialLetterStudio: React.FC<OfficialLetterStudioProps> = ({
       increment_proposal: 'ಕಾಲಮಿತಿ_ವೇತನ_ಬಡ್ತಿ_ಪ್ರಸ್ತಾವನೆ_ಮಂಜುಳಾ.pdf',
       service_certificate: 'ಸೇವಾ_ಪ್ರಮಾಣ_ಪತ್ರ_ಕೋರಿಕೆ_ಆನಂದ್.pdf',
     };
-    const fileName = scenarioNames[scenario] || 'ಮಾದರಿ_ದಾಖಲೆ.pdf';
+    const fileName = scenarioNames[scenario] || 'ಅಧಿಕೃತ_ದಾಖಲೆ.pdf';
     const mockFile = {
       name: fileName,
       size: '245.0 KB',
@@ -829,7 +837,7 @@ export const OfficialLetterStudio: React.FC<OfficialLetterStudioProps> = ({
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-bold text-stone-700 flex items-center gap-1.5">
                     <Sparkles className="w-4 h-4 text-amber-600" />
-                    <span>ಅಥವಾ ಮಾದರಿ ದಾಖಲೆಗಳೊಂದಿಗೆ ತಕ್ಷಣವೇ ಪರೀಕ್ಷಿಸಿ (Sample Scenarios):</span>
+                    <span>ಅಧಿಕೃತ ಇಲಾಖಾ ಕಡತ ಪ್ರಕ್ರಿಯೆಗಳು (Standard Procedures):</span>
                   </span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1559,10 +1567,13 @@ export const OfficialLetterStudio: React.FC<OfficialLetterStudioProps> = ({
                       <div className="text-center min-w-[240px] text-xs space-y-1">
                         <div className="h-10"></div>
                         <p className="font-extrabold text-stone-950">
-                          ({generatedLetter.signatory?.designation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು'})
+                          ({generatedLetter.signatory?.name || fallbackSignatoryName})
                         </p>
-                        <p className="font-semibold text-stone-800">
-                          {generatedLetter.signatory?.office || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ'}
+                        <p className="font-bold text-stone-900">
+                          {generatedLetter.signatory?.designation || fallbackSignatoryDesig}
+                        </p>
+                        <p className="font-semibold text-stone-700 text-[11px]">
+                          {generatedLetter.signatory?.office || fallbackSignatoryOffice}
                         </p>
                       </div>
                     </div>

@@ -27,6 +27,7 @@ import {
   Users,
 } from 'lucide-react';
 import { GeneratedOfficeLetter, GeneralLetterCategory, GeneralLetterFormData, Employee } from '../types';
+import { PrintPreviewModal } from './PrintPreviewModal';
 
 interface GeneralLetterStudioProps {
   currentUser?: { displayName: string; role: string } | null;
@@ -47,6 +48,61 @@ export const GeneralLetterStudio: React.FC<GeneralLetterStudioProps> = ({
   const [category, setCategory] = useState<GeneralLetterCategory>('employee');
   const [empPickerFilter, setEmpPickerFilter] = useState('');
   const [showEmpPicker, setShowEmpPicker] = useState(false);
+  const [isPrintPreviewOpen, setIsPrintPreviewOpen] = useState(false);
+
+  // Dynamic DDO Signatory State
+  const [ddoOfficer, setDdoOfficer] = useState<{
+    name: string;
+    designation: string;
+    office: string;
+    code: string;
+  }>(() => {
+    const emp = employees?.find(e => e.isDdo === true) ||
+                employees?.find(e => e.designation?.toLowerCase().includes('ddo')) ||
+                employees?.find(e => e.designation?.includes('ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿ'));
+    return {
+      name: emp?.fullName || 'ಹೆಚ್. ರವಿಕುಮಾರ್',
+      designation: emp?.designation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ',
+      office: emp?.placeOfWork || emp?.officeLocation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
+      code: emp?.ddoCode || '14041ED001',
+    };
+  });
+
+  useEffect(() => {
+    const ddoEmp = employees.find(e => e.isDdo === true) || 
+                   employees.find(e => e.designation?.toLowerCase().includes('ddo')) ||
+                   employees.find(e => e.designation?.includes('ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿ'));
+    fetch('/api/memorandum/office-config')
+      .then(res => res.json())
+      .then(data => {
+        const cfg = data.office || data.config || null;
+        if (ddoEmp) {
+          setDdoOfficer({
+            name: ddoEmp.fullName,
+            designation: ddoEmp.designation || cfg?.ddoDesignation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ',
+            office: ddoEmp.placeOfWork || ddoEmp.officeLocation || cfg?.ddoOfficeName || cfg?.officeNameKannada || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
+            code: ddoEmp.ddoCode || cfg?.ddoCode || '14041ED001',
+          });
+        } else if (cfg && (cfg.ddoOfficerName || cfg.officerName)) {
+          setDdoOfficer({
+            name: cfg.ddoOfficerName || cfg.officerName,
+            designation: cfg.ddoDesignation || cfg.officerDesignation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ',
+            office: cfg.ddoOfficeName || cfg.officeNameKannada || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
+            code: cfg.ddoCode || '14041ED001',
+          });
+        }
+      })
+      .catch(() => {
+        if (ddoEmp) {
+          setDdoOfficer({
+            name: ddoEmp.fullName,
+            designation: ddoEmp.designation,
+            office: ddoEmp.placeOfWork || ddoEmp.officeLocation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
+            code: ddoEmp.ddoCode || '14041ED001',
+          });
+        }
+      });
+  }, [employees]);
 
   // Form states
   const [formData, setFormData] = useState<GeneralLetterFormData>({
@@ -162,9 +218,9 @@ export const GeneralLetterStudio: React.FC<GeneralLetterStudioProps> = ({
           `೩. ಕಚೇರಿಯ ಕಡತ ಸಂಖ್ಯೆ: ${fileNo}.`
         ],
         signatory: {
-          name: currentUser?.displayName || 'ಬಿ.ಕೆ. ನಾರಾಯಣಪ್ಪ',
-          designation: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು',
-          office: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಚೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
+          name: ddoOfficer.name,
+          designation: ddoOfficer.designation,
+          office: ddoOfficer.office,
         },
         employeeName,
         designation: desig,
@@ -556,7 +612,30 @@ export const GeneralLetterStudio: React.FC<GeneralLetterStudioProps> = ({
       if (data.letter) {
         setGeneratedLetter(data.letter);
       }
-      showToast('ಪತ್ರವನ್ನು ಕಡತಾಗಾರದಲ್ಲಿ ಯಶಸ್ವಿಯಾಗಿ ಉಳಿಸಲಾಗಿದೆ.');
+
+      // Link and save directly to file docket in e-Dak registry
+      if (onSaveToRegistry) {
+        await onSaveToRegistry({
+          direction: 'outward',
+          referenceNumber: letterToSave.letterNumber,
+          senderName: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು, ಭದ್ರಾವತಿ',
+          senderDepartment: 'ಶಾಲಾ ಶಿಕ್ಷಣ ಮತ್ತು ಸಾಕ್ಷರತಾ ಇಲಾಖೆ',
+          recipientName: letterToSave.recipient || (category === 'employee' ? letterToSave.employeeName : 'ಸಂಬಂಧಪಟ್ಟವರು'),
+          recipientDepartment: letterToSave.officeName || 'ಸರ್ಕಾರಿ ಶಾಲೆ / ಕಚೇರಿ, ಭದ್ರಾವತಿ',
+          recipientDesignation: letterToSave.designation || 'ಅಧಿಕಾರಿಗಳು / ಮುಖ್ಯಸ್ಥರು',
+          subject: letterToSave.subject,
+          category: category === 'employee' ? 'Establishment & Service' : 'General Circular',
+          section: 'ಸ.ಪ್ರಾ.ಶಿ (ಆ2)',
+          priority: 'Normal',
+          status: 'Dispatched',
+          fileNumber: formData.fileNumber || '57',
+          dateReceivedOrIssued: letterToSave.date || new Date().toISOString().split('T')[0],
+          bodyText: letterToSave.bodyText,
+          createdBy: (currentUser as any)?.id || (currentUser as any)?.username || currentUser?.displayName || 'User-1',
+        });
+      }
+
+      showToast('ಪತ್ರವನ್ನು ಕಡತಾಗಾರದಲ್ಲಿ ಹಾಗೂ ಕಡತ ನಿರ್ವಹಣೆಯಲ್ಲಿ ಯಶಸ್ವಿಯಾಗಿ ಉಳಿಸಲಾಗಿದೆ.');
       fetchGeneralLetters();
     } catch (err: any) {
       console.error(err);
@@ -576,15 +655,15 @@ export const GeneralLetterStudio: React.FC<GeneralLetterStudioProps> = ({
     showToast('Microsoft Word (.docx) ಡೌನ್‌ಲೋಡ್ ಆರಂಭವಾಗಿದೆ.');
   };
 
-  // Print Document
+  // Print Document (Opens A4 Print Preview Modal first)
   const handlePrint = () => {
-    window.print();
+    setIsPrintPreviewOpen(true);
   };
 
-  // PDF Download (Triggers Print to PDF Dialog)
+  // PDF Download (Opens A4 Print Preview Modal with print guidance)
   const handleDownloadPdf = () => {
-    window.print();
-    showToast('ಮುದ್ರಣ ಪುಟ ತೆರೆಯಲಾಗಿದೆ. "Save as PDF" ಆಯ್ಕೆ ಮಾಡಿ ಉಳಿಸಬಹುದು.');
+    setIsPrintPreviewOpen(true);
+    showToast('A4 ಪ್ರಿಂಟ್ ಪ್ರಿವ್ಯೂ ತೆರೆಯಲಾಗಿದೆ. "ಮುದ್ರಿಸಿ" ಕ್ಲಿಕ್ ಮಾಡಿ "Save as PDF" ಆಯ್ಕೆಮಾಡಿ.');
   };
 
   // Copy Plain Text
@@ -707,51 +786,6 @@ export const GeneralLetterStudio: React.FC<GeneralLetterStudioProps> = ({
                   (Other General Letter)
                 </span>
               </button>
-            </div>
-
-            {/* Instant Sample Presets */}
-            <div className="mt-3 pt-3 border-t border-stone-100 flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-stone-500 flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>ಮಾದರಿ ಮಾಹಿತಿ ಭರ್ತಿ (Samples):</span>
-              </span>
-              <div className="flex items-center gap-1.5">
-                {category === 'employee' ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => handleLoadSample('emp_service')}
-                      className="px-2 py-0.5 rounded text-[10px] font-medium bg-stone-100 hover:bg-amber-100 text-stone-700 hover:text-amber-900 border border-stone-200 cursor-pointer"
-                    >
-                      ಸೇವಾ ವಿವರ
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleLoadSample('emp_doc')}
-                      className="px-2 py-0.5 rounded text-[10px] font-medium bg-stone-100 hover:bg-amber-100 text-stone-700 hover:text-amber-900 border border-stone-200 cursor-pointer"
-                    >
-                      ದಾಖಲೆ ಸಲ್ಲಿಕೆ
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => handleLoadSample('other_circular')}
-                      className="px-2 py-0.5 rounded text-[10px] font-medium bg-stone-100 hover:bg-amber-100 text-stone-700 hover:text-amber-900 border border-stone-200 cursor-pointer"
-                    >
-                      ಕ್ರೀಡಾ ಸುತ್ತೋಲೆ
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleLoadSample('other_repair')}
-                      className="px-2 py-0.5 rounded text-[10px] font-medium bg-stone-100 hover:bg-amber-100 text-stone-700 hover:text-amber-900 border border-stone-200 cursor-pointer"
-                    >
-                      ದುರಸ್ತಿ ಪ್ರಸ್ತಾವನೆ
-                    </button>
-                  </>
-                )}
-              </div>
             </div>
           </div>
 
@@ -1377,14 +1411,15 @@ export const GeneralLetterStudio: React.FC<GeneralLetterStudioProps> = ({
               </button>
 
               <button
-                id="btn-print-general"
+                id="btn-print-preview-general"
                 type="button"
-                onClick={handlePrint}
+                onClick={() => setIsPrintPreviewOpen(true)}
                 disabled={!generatedLetter}
-                className="px-2.5 py-1.5 bg-[#2b2b2b] hover:bg-stone-800 text-white rounded-lg text-xs font-bold border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#f59e0b] transition-all cursor-pointer disabled:opacity-40"
-                title="ಮುದ್ರಿಸಿ (Print)"
+                className="px-3 py-1.5 bg-[#2b2b2b] hover:bg-stone-800 text-white rounded-lg text-xs font-bold border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#f59e0b] flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-40 font-kannada"
+                title="A4 ಟೆಂಪ್ಲೇಟ್ ಓವರ್‌ಲೇ ಪ್ರಿಂಟ್ ಪೂರ್ವವೀಕ್ಷಣೆ (Print Preview Modal)"
               >
                 <Printer className="w-3.5 h-3.5 text-amber-400" />
+                <span>🖨️ A4 ಪ್ರಿಂಟ್ ಪ್ರಿವ್ಯೂ</span>
               </button>
 
               <button
@@ -1532,10 +1567,13 @@ export const GeneralLetterStudio: React.FC<GeneralLetterStudioProps> = ({
                     <div className="text-center w-72 space-y-1">
                       <p className="text-xs text-stone-700 mb-8">ತಮ್ಮ ನಂಬುಗೆಯ,</p>
                       <p className="font-bold text-stone-950 text-xs">
-                        (ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು)
+                        ({generatedLetter.signatory?.name || ddoOfficer.name})
                       </p>
-                      <p className="text-xs text-stone-800">
-                        ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ
+                      <p className="text-xs font-semibold text-stone-800">
+                        {generatedLetter.signatory?.designation || ddoOfficer.designation}
+                      </p>
+                      <p className="text-[11px] text-stone-600">
+                        {generatedLetter.signatory?.office || ddoOfficer.office}
                       </p>
                     </div>
                   </div>
@@ -1571,21 +1609,26 @@ export const GeneralLetterStudio: React.FC<GeneralLetterStudioProps> = ({
                       ಎಡಭಾಗದ ನಮೂನೆಯಲ್ಲಿ ನೌಕರರ ಅಥವಾ ಇತರೆ ವಿವರಗಳನ್ನು ನಮೂದಿಸಿ, &ldquo;✨ AI ಮೂಲಕ ಸಾಮಾನ್ಯ ಪತ್ರ ರಚಿಸಿ&rdquo; ಕ್ಲಿಕ್ ಮಾಡಿ.
                     </p>
                   </div>
-                  <div className="pt-2">
-                    <button
-                      type="button"
-                      onClick={() => handleLoadSample('emp_service')}
-                      className="px-3 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold border border-amber-300 transition-all cursor-pointer"
-                    >
-                      ಮಾದರಿ ಪತ್ರದೊಂದಿಗೆ ಪರೀಕ್ಷಿಸಿ
-                    </button>
-                  </div>
                 </div>
               )}
             </div>
           )}
         </div>
       </div>
+
+      {/* A4 PRINT PREVIEW MODAL OVERLAY */}
+      <PrintPreviewModal
+        isOpen={isPrintPreviewOpen}
+        onClose={() => setIsPrintPreviewOpen(false)}
+        elementId="general-letter-paper"
+        documentTitle={generatedLetter ? `ಸಾಮಾನ್ಯ ಪತ್ರ - ${generatedLetter.letterNumber}` : 'ಸಾಮಾನ್ಯ ಪತ್ರ A4 ಪೂರ್ವವೀಕ್ಷಣೆ'}
+        meta={{
+          letterNumber: generatedLetter?.letterNumber,
+          date: generatedLetter?.date,
+          subject: generatedLetter?.subject,
+          recipient: generatedLetter?.recipient
+        }}
+      />
     </div>
   );
 };

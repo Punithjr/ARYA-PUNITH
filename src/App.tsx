@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { EducationLetter, MasterDocketFile, DakRegisterSummary, ActionNote, Employee, AdminAuthUser, DocumentAttachment, SchoolInstitution, OfficeSection } from './types';
 import { DeptHeader, AppNavTab } from './components/DeptHeader';
 import { LettersRegistry } from './components/LettersRegistry';
@@ -29,15 +29,48 @@ import { MasterDocketAuditModal } from './components/MasterDocketAuditModal';
 import { FileDashboard } from './components/FileDashboard';
 import { LeaveCalendarView } from './components/LeaveCalendarView';
 import { PensionStudioView } from './components/PensionStudioView';
-import { Check, AlertCircle } from 'lucide-react';
+import { UserManagementModal } from './components/UserManagementModal';
+import { KcsrRtiChatbot } from './components/KcsrRtiChatbot';
+import { RtiManagementView } from './components/RtiManagementView';
+import { SEED_OFFICE_STAFF } from './components/OfficeStaffTable';
+import { 
+  getRegisteredOfficeUsers, 
+  MAX_OFFICE_USERS, 
+  fetchEmployeesFromFirestore, 
+  saveSingleEmployeeToFirestore, 
+  deleteEmployeeFromFirestore 
+} from './lib/firebase';
+import { Check, AlertCircle, Sparkles, Users, ArrowLeft } from 'lucide-react';
+
+const MODULE_TITLES_KANNADA: Record<string, string> = {
+  fileDashboard: '೧. ಕಡತಗಳ ಡ್ಯಾಶ್ ಬೋರ್ಡ್ (Files Dashboard & Movement)',
+  generalLetter: '೨. ಸಾಮಾನ್ಯ ಕಡತ / ಸಾಮಾನ್ಯ ಪತ್ರ ತಯಾರಿಸಿ (General Letter Studio)',
+  drafter: '೨. ಸಾಮಾನ್ಯ ಕಡತ / ಸಾಮಾನ್ಯ ಪತ್ರ ತಯಾರಿಸಿ (General Letter Studio)',
+  memorandum: '೩. ಜ್ಞಾಪನಾದೇಶ (Memorandum & Sanctions Studio)',
+  prapathra28: '೪. ಪತ್ರ ೨೮ (ಪ್ರಪತ್ರ-೨೮ ವಾರ್ಷಿಕ ವೇತನ ಬಡ್ತಿ)',
+  employees: '೫. ನೌಕರರ ಮಾಹಿತಿ (Employee Roster & Service Info)',
+  leaveCalendar: '೬. ರಜ ಕ್ಯಾಲೆಂಡರ್ (Leave Calendar & Child Care Leave)',
+  pension: '೭. ಪಿಂಚಣಿ & ನಿವೃತ್ತಿ ವೇತನ (Pension Studio)',
+  orderFiles: '೮. ಆದೇಶ ಕಡತ (Official Order Dockets & Files)',
+  salaryChanges: '೯. ವೇತನ ಬದಲಾವಣೆ (Salary Increment / Stage Changes)',
+  reports: '೧೦. ವರದಿಗಳು (Reports & Statistics)',
+  search: '೧೧. ಹುಡುಕಾಟ (Unified Search & Tracking)',
+  settings: '೧೨. ಸೆಟ್ಟಿಂಗ್ಸ್ & ಡಿಡಿಓ ವಿವರ (Settings & DDO Setup)',
+  schools: '೧೩. ಶಾಲೆಗಳು & ಅನುದಾನ (Schools Management)',
+  circularStudio: '೧೪. ಶಾಸನಬದ್ಧ ಸುತ್ತಲೆ (Statutory Circular Studio)',
+  masterAudit: '೧೫. ಕಡತ ಆಡಿತ್ (Docket Audit & Scrutiny)',
+  rti: '೧೬. ಮಾಹಿತಿ ಹಕ್ಕು ರಿಜಿಸ್ಟರ್ & ೧೮. RTI ಪತ್ರ ವ್ಯವಹಾರ (RTI Management)',
+  registry: '೧೭. ಪತ್ರಗಳು (ಆವಕ & ಜಾವಕ e-Dak Registry)',
+  files: '೮. ಕಡತಗಳ ನಿರ್ವಹಣೆ (Master Docket Files)',
+};
 
 export default function App() {
-  // Authentication State: Only user admin with password zero0
+  // Authentication State: 5 registered authorized users & Google/password auth
   const [currentUser, setCurrentUser] = useState<AdminAuthUser | null>(() => {
     try {
       const saved = localStorage.getItem('edu_efms_auth_user') || sessionStorage.getItem('edu_efms_auth_user');
       const token = localStorage.getItem('edu_efms_auth_token') || sessionStorage.getItem('edu_efms_auth_token');
-      if (saved && token === 'admin-auth-session-zero0') {
+      if (saved && (token === 'admin-auth-session-zero0' || token?.startsWith('edu-auth-session-') || token?.startsWith('google-auth-session-'))) {
         return JSON.parse(saved);
       }
     } catch (e) {
@@ -45,6 +78,12 @@ export default function App() {
     }
     return null;
   });
+
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [isAiChatOpen, setIsAiChatOpen] = useState(false);
+  const [userSlotsCount, setUserSlotsCount] = useState<number>(5);
+  const [selectedUserFilter, setSelectedUserFilter] = useState<string>('all');
+  const [allRegisteredUsers, setAllRegisteredUsers] = useState<AdminAuthUser[]>([]);
 
   const [letters, setLetters] = useState<EducationLetter[]>([]);
   const [files, setFiles] = useState<MasterDocketFile[]>([]);
@@ -138,13 +177,96 @@ export default function App() {
     }
   }, []);
 
-  // Fetch departmental employees establishment
+  // Fetch departmental employees establishment with durable multi-layer persistence
   const fetchEmployees = useCallback(async () => {
+    // 1. Instant hydration from localStorage cache
     try {
+      const cached = localStorage.getItem('edu_persistent_employees');
+      if (cached) {
+        const parsed: Employee[] = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setEmployees(parsed);
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    try {
+      // 2. Fetch from backend API (which loads from disk)
+      let serverList: Employee[] = [];
       const res = await fetch('/api/employees');
       if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
         const data = await res.json();
-        setEmployees(data.employees || []);
+        serverList = data.employees || [];
+      }
+
+      // 3. Fetch from Firestore Cloud backup
+      let firestoreList: Employee[] = [];
+      try {
+        firestoreList = await fetchEmployeesFromFirestore();
+      } catch (fErr) {
+        console.warn('Firestore fetch employees note:', fErr);
+      }
+
+      // 4. Merge all sources using unique identifier (kgidNumber, employeeCode, or id)
+      const mergedMap = new Map<string, Employee>();
+
+      // Base server list
+      serverList.forEach(e => {
+        const key = (e.kgidNumber && e.kgidNumber.trim()) || (e.employeeCode && e.employeeCode.trim()) || e.id;
+        mergedMap.set(key, e);
+      });
+
+      // Merge Firestore records
+      let hasMissingOnServer = false;
+      firestoreList.forEach(e => {
+        const key = (e.kgidNumber && e.kgidNumber.trim()) || (e.employeeCode && e.employeeCode.trim()) || e.id;
+        if (!mergedMap.has(key)) {
+          mergedMap.set(key, e);
+          hasMissingOnServer = true;
+        }
+      });
+
+      // Merge local storage records
+      try {
+        const cached = localStorage.getItem('edu_persistent_employees');
+        if (cached) {
+          const parsed: Employee[] = JSON.parse(cached);
+          parsed.forEach(e => {
+            const key = (e.kgidNumber && e.kgidNumber.trim()) || (e.employeeCode && e.employeeCode.trim()) || e.id;
+            if (!mergedMap.has(key)) {
+              mergedMap.set(key, e);
+              hasMissingOnServer = true;
+            }
+          });
+        }
+      } catch (e) {}
+
+      // 3.5 Merge official BEO office staff members so they are always in the roster
+      SEED_OFFICE_STAFF.forEach(staff => {
+        const key = (staff.kgidNumber && staff.kgidNumber.trim()) || (staff.employeeCode && staff.employeeCode.trim()) || staff.id;
+        if (!mergedMap.has(key)) {
+          mergedMap.set(key, staff);
+          hasMissingOnServer = true;
+        }
+      });
+
+      const finalList = Array.from(mergedMap.values());
+      setEmployees(finalList);
+
+      // Save to localStorage for instant hydration on any reload / login
+      try {
+        localStorage.setItem('edu_persistent_employees', JSON.stringify(finalList));
+      } catch (e) {}
+
+      // If Firestore or local had employees that the server disk didn't have, sync back to server
+      if (hasMissingOnServer && finalList.length > serverList.length) {
+        fetch('/api/employees/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientEmployees: finalList }),
+        }).catch(err => console.warn('Sync to server note:', err));
       }
     } catch (err) {
       console.error('Failed to fetch employees:', err);
@@ -164,9 +286,64 @@ export default function App() {
     }
   }, [currentUser, loadAllData]);
 
-  const handleLoginSuccess = (user: AdminAuthUser, token: string) => {
+  // Synchronize 5 user slots count on mount
+  useEffect(() => {
+    getRegisteredOfficeUsers().then(users => {
+      if (users && users.length > 0) {
+        setUserSlotsCount(users.length);
+        setAllRegisteredUsers(users);
+      }
+    }).catch(err => console.warn('Could not fetch user slots count:', err));
+  }, []);
+
+  const isAdmin = currentUser?.role === 'Administrator' || currentUser?.role === 'Admin' || currentUser?.username === 'admin' || currentUser?.username === 'beo_admin';
+
+  // Visible Letters based on user scoping
+  const visibleLetters = useMemo(() => {
+    if (isAdmin) {
+      if (selectedUserFilter === 'all') return letters;
+      return letters.filter(l => l.createdBy === selectedUserFilter || l.assignedOfficer?.includes(selectedUserFilter));
+    }
+    // Regular user: only their own letters
+    const myId = currentUser?.id;
+    const myUser = currentUser?.username;
+    const myName = currentUser?.displayName;
+    return letters.filter(l => 
+      l.createdBy === myId || 
+      l.createdBy === myUser || 
+      l.createdBy === myName ||
+      l.assignedOfficer?.includes(myName || '') ||
+      !l.createdBy
+    );
+  }, [letters, isAdmin, selectedUserFilter, currentUser]);
+
+  // Visible Dockets based on user scoping
+  const visibleFiles = useMemo(() => {
+    if (isAdmin) {
+      if (selectedUserFilter === 'all') return files;
+      return files.filter(f => f.createdBy === selectedUserFilter || f.currentCustodian?.includes(selectedUserFilter));
+    }
+    // Regular user: only their own dockets
+    const myId = currentUser?.id;
+    const myUser = currentUser?.username;
+    const myName = currentUser?.displayName;
+    return files.filter(f => 
+      f.createdBy === myId || 
+      f.createdBy === myUser || 
+      f.createdBy === myName ||
+      f.currentCustodian?.includes(myName || '') ||
+      !f.createdBy
+    );
+  }, [files, isAdmin, selectedUserFilter, currentUser]);
+
+  // Visible Employees
+  const visibleEmployees = useMemo(() => {
+    return employees;
+  }, [employees]);
+
+  const handleLoginSuccess = (user: AdminAuthUser, _token: string) => {
     setCurrentUser(user);
-    showToast(`ಸ್ವಾಗತ! (Welcome) Logged in as System Administrator (${user.username})`);
+    showToast(`ಸ್ವಾಗತ! (Welcome) ${user.displayName || user.username} (${user.role})`);
   };
 
   const handleLogout = () => {
@@ -484,6 +661,29 @@ export default function App() {
         console.warn('Backend update failed, retaining optimistic state:', err);
       }
       showToast(`ನೌಕರರ ವಿವರಗಳನ್ನು ಯಶಸ್ವಿಯಾಗಿ ನವೀಕರಿಸಲಾಗಿದೆ ("${optimisticUpdated.fullName}")`);
+      saveSingleEmployeeToFirestore(optimisticUpdated);
+
+      if (employeeData.isDdo) {
+        fetch('/api/memorandum/office-config', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ddoOfficerName: optimisticUpdated.fullName,
+            ddoDesignation: optimisticUpdated.designation,
+            ddoKgidNumber: optimisticUpdated.kgidNumber || '',
+            ddoMobile: optimisticUpdated.phone || '',
+            ddoEmail: optimisticUpdated.email || '',
+            ddoEmployeeId: optimisticUpdated.id,
+          }),
+        }).catch(err => console.warn('DDO config sync note:', err));
+      }
+
+      try {
+        const cached = localStorage.getItem('edu_persistent_employees');
+        const list: Employee[] = cached ? JSON.parse(cached) : [];
+        const updatedList = list.map(e => e.id === optimisticUpdated.id ? optimisticUpdated : e);
+        localStorage.setItem('edu_persistent_employees', JSON.stringify(updatedList));
+      } catch (e) {}
     } else {
       const newEmpId = `emp-${Date.now()}`;
       const newEmpObj: Employee = {
@@ -505,6 +705,28 @@ export default function App() {
 
       setEmployees(prev => [newEmpObj, ...prev]);
 
+      saveSingleEmployeeToFirestore(newEmpObj);
+
+      if (employeeData.isDdo) {
+        fetch('/api/memorandum/office-config', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ddoOfficerName: newEmpObj.fullName,
+            ddoDesignation: newEmpObj.designation,
+            ddoKgidNumber: newEmpObj.kgidNumber || '',
+            ddoMobile: newEmpObj.phone || '',
+            ddoEmail: newEmpObj.email || '',
+            ddoEmployeeId: newEmpId,
+          }),
+        }).catch(err => console.warn('DDO config sync note:', err));
+      }
+      try {
+        const cached = localStorage.getItem('edu_persistent_employees');
+        const list: Employee[] = cached ? JSON.parse(cached) : [];
+        localStorage.setItem('edu_persistent_employees', JSON.stringify([newEmpObj, ...list]));
+      } catch (e) {}
+
       try {
         const res = await fetch('/api/employees', {
           method: 'POST',
@@ -514,6 +736,7 @@ export default function App() {
         const data = await res.json();
         if (res.ok && data.employee) {
           setEmployees(prev => prev.map(e => e.id === newEmpId ? data.employee : e));
+          saveSingleEmployeeToFirestore(data.employee);
         }
       } catch (err) {
         console.warn('Backend create failed, retaining local state:', err);
@@ -531,6 +754,14 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to delete employee record');
       setEmployees(prev => prev.filter(e => e.id !== id));
+      deleteEmployeeFromFirestore(id);
+      try {
+        const cached = localStorage.getItem('edu_persistent_employees');
+        if (cached) {
+          const list: Employee[] = JSON.parse(cached);
+          localStorage.setItem('edu_persistent_employees', JSON.stringify(list.filter(e => e.id !== id)));
+        }
+      } catch (e) {}
       showToast('Official removed from establishment roster');
     } catch (err: any) {
       showToast(err?.message || 'Error deleting employee');
@@ -548,6 +779,14 @@ export default function App() {
       if (!res.ok) throw new Error(data.error || 'Failed to delete selected employees');
       const idSet = new Set(ids);
       setEmployees(prev => prev.filter(e => !idSet.has(e.id)));
+      ids.forEach(id => deleteEmployeeFromFirestore(id));
+      try {
+        const cached = localStorage.getItem('edu_persistent_employees');
+        if (cached) {
+          const list: Employee[] = JSON.parse(cached);
+          localStorage.setItem('edu_persistent_employees', JSON.stringify(list.filter(e => !idSet.has(e.id))));
+        }
+      } catch (e) {}
       showToast(data.message || `${ids.length} ನೌಕರರ ದಾಖಲೆಗಳನ್ನು ತೆಗೆಯಲಾಗಿದೆ`);
     } catch (err: any) {
       showToast(err?.message || 'Error removing selected employees');
@@ -715,6 +954,9 @@ export default function App() {
         employeesCount={employees.length}
         currentUser={currentUser}
         onLogout={handleLogout}
+        onOpenUserManagement={() => setIsUserModalOpen(true)}
+        onOpenAiChat={() => setIsAiChatOpen(true)}
+        userSlotsCount={userSlotsCount}
       />
 
       {/* Main Content Area */}
@@ -728,13 +970,99 @@ export default function App() {
           </div>
         ) : (
           <>
+            {/* ADMIN WORKSPACE FILTER: 5 USERS MONITORING BAR (೫ ಬಳಕೆದಾರರು ಬಳಸುವ ಪತ್ರಗಳನ್ನು ವೀಕ್ಷಣೆ ಮಾಡಿ) */}
+            {isAdmin ? (
+              <div className="bg-amber-100/90 border-2 border-[#2b2b2b] px-4 py-2.5 rounded-xl mb-4 shadow-[3px_3px_0px_#2b2b2b] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs font-kannada">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded bg-[#2b2b2b] text-[#f59e0b] font-bold font-mono text-[10px]">
+                    ADMIN CONTROL
+                  </span>
+                  <span className="font-bold text-[#2b2b2b]">
+                    ೫ ಬಳಕೆದಾರರ ಪತ್ರಗಳು & ಕಡತಗಳ ವೀಕ್ಷಣೆ (All 5 Users Monitoring):
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={() => setSelectedUserFilter('all')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold border-2 border-[#2b2b2b] cursor-pointer transition-all ${
+                      selectedUserFilter === 'all'
+                        ? 'bg-[#2b2b2b] text-[#f59e0b] shadow-[1px_1px_0px_#2b2b2b]'
+                        : 'bg-white text-stone-700 hover:bg-amber-50'
+                    }`}
+                  >
+                    ಎಲ್ಲಾ ೫ ಬಳಕೆದಾರರು ({letters.length} ಪತ್ರಗಳು)
+                  </button>
+                  {allRegisteredUsers.map((u, idx) => {
+                    const uKey = u.id || u.username;
+                    const uLettersCount = letters.filter(l => l.createdBy === uKey || l.assignedOfficer?.includes(u.displayName)).length;
+                    return (
+                      <button
+                        key={uKey}
+                        onClick={() => setSelectedUserFilter(uKey)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border-2 border-[#2b2b2b] cursor-pointer transition-all ${
+                          selectedUserFilter === uKey
+                            ? 'bg-[#2b2b2b] text-[#f59e0b] shadow-[1px_1px_0px_#2b2b2b]'
+                            : 'bg-white text-stone-700 hover:bg-amber-50'
+                        }`}
+                        title={`${u.displayName} (${u.role})`}
+                      >
+                        ಬಳಕೆದಾರ-{idx + 1}: {u.displayName.split(' ')[0]} ({uLettersCount})
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-sky-50 border-2 border-[#2b2b2b] px-4 py-2.5 rounded-xl mb-4 shadow-[3px_3px_0px_#2b2b2b] flex items-center justify-between text-xs font-kannada">
+                <div className="flex items-center gap-2 font-bold text-sky-950">
+                  <span className="w-2.5 h-2.5 rounded-full bg-sky-600 animate-pulse"></span>
+                  <span>ಬಳಕೆದಾರರ ಪ್ರತ್ಯೇಕ ವಲಯ ({currentUser?.displayName} Workspace):</span>
+                  <span className="text-stone-600 font-normal hidden sm:inline">
+                    ನೀವು ಬಳಸುವ ಪತ್ರಗಳು ಹಾಗೂ ಕಡತಗಳನ್ನು ಮಾತ್ರ ಇಲ್ಲಿ ತೋರಿಸಲಾಗುತ್ತಿದೆ.
+                  </span>
+                </div>
+                <span className="px-2.5 py-0.5 rounded bg-sky-200 text-sky-950 font-mono font-bold text-[11px] border border-sky-400">
+                  {currentUser?.role || 'User'}
+                </span>
+              </div>
+            )}
+
+            {/* 18 MODULES RETURN-TO-HOME BAR (ಮುಖಪುಟಕ್ಕೆ ಹಿಂತಿರುಗಿ) */}
+            {activeTab !== 'home' && (
+              <div className="mb-5 bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 border-2 border-[#2b2b2b] p-3 sm:p-3.5 rounded-xl shadow-[4px_4px_0px_#2b2b2b] flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <button
+                    id="btn-global-back-to-home"
+                    onClick={() => setActiveTab('home')}
+                    className="px-4 py-2 bg-[#2b2b2b] hover:bg-stone-800 text-[#f59e0b] font-bold text-xs rounded-lg flex items-center gap-2 transition-all cursor-pointer border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#f59e0b] hover:-translate-x-0.5 hover:-translate-y-0.5 shrink-0 font-kannada"
+                    title="ಮುಖಪುಟಕ್ಕೆ ಹಿಂತಿರುಗಿ"
+                  >
+                    <ArrowLeft className="w-4 h-4 text-[#f59e0b]" />
+                    <span>&larr; ಮುಖಪುಟಕ್ಕೆ ಹಿಂತಿರುಗಿ (Home)</span>
+                  </button>
+                  <div className="text-left">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-stone-600 block">
+                      ಪ್ರಸ್ತುತ ಸಕ್ರಿಯ ನಿರ್ವಹಣಾ ಮಾಡ್ಯೂಲ್:
+                    </span>
+                    <h3 className="font-bold text-xs sm:text-sm text-[#2b2b2b] font-kannada">
+                      {MODULE_TITLES_KANNADA[activeTab] || activeTab}
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-stone-700 hidden md:block text-right font-kannada">
+                  ಕೆಲಸ ನಿರ್ವಹಣೆ ಮುಗಿದ ನಂತರ ಮೇಲಿನ ಬಟನ್ ಕ್ಲಿಕ್ ಮಾಡಿ ನೇರವಾಗಿ ಮುಖಪುಟಕ್ಕೆ ತೆರಳಬಹುದು.
+                </div>
+              </div>
+            )}
+
             {/* MODULE 0: ಮುಖಪುಟ (HOME DASHBOARD - OFFICE DETAILS, SECTIONS, FILES & INCREMENT) */}
             {activeTab === 'home' && (
               <HomeDashboard
                 currentUser={currentUser}
-                employees={employees}
-                files={files}
-                letters={letters}
+                employees={visibleEmployees}
+                files={visibleFiles}
+                letters={visibleLetters}
                 sections={sections}
                 activeSection={activeSection}
                 onSelectSection={(sec) => setActiveSection(sec)}
@@ -818,8 +1146,8 @@ export default function App() {
             {activeTab === 'pension' && (
               <PensionStudioView
                 currentUser={currentUser}
-                employees={employees}
-                files={files}
+                employees={visibleEmployees}
+                files={visibleFiles}
                 onSaveLetterToRegistry={handleSaveLetter}
                 onAttachToDocketFile={(fileNum, docName) => {
                   showToast(`ಕಡತ ಸಂ: ${fileNum} ಗೆ ದಾಖಲೆ "${docName}" ಲಗತ್ತಿಸಲಾಗಿದೆ.`);
@@ -836,8 +1164,8 @@ export default function App() {
             {/* MODULE: ಕಡತಗಳ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್ (FILE DASHBOARD & MOVEMENT TIMELINE) */}
             {activeTab === 'fileDashboard' && (
               <FileDashboard
-                files={files}
-                letters={letters}
+                files={visibleFiles}
+                letters={visibleLetters}
                 onMoveFile={handleMoveDocketFile}
                 onCreateFile={handleCreateDocketFile}
                 onDraftLetterForFile={(file) => {
@@ -857,7 +1185,7 @@ export default function App() {
             {/* MODULE: ಪ್ರಪತ್ರ ೨೮ (PRAPATHRA 28 STUDIO) */}
             {activeTab === 'prapathra28' && (
               <Prapathra28Studio
-                employees={employees}
+                employees={visibleEmployees}
                 currentUser={currentUser}
                 initialMonth={prapathraInitialMonth}
                 onRefreshEmployees={fetchEmployees}
@@ -873,7 +1201,7 @@ export default function App() {
             {activeTab === 'memorandum' && (
               <MemorandumOrderStudio
                 currentUser={currentUser}
-                employees={employees}
+                employees={visibleEmployees}
                 selectedEmployee={selectedEmployeeForStudio}
                 onAddEmployeeGlobally={(newEmp) => {
                   setEmployees(prev => {
@@ -897,9 +1225,9 @@ export default function App() {
             {/* MODULE 2: ನೌಕರರ ಮಾಹಿತಿ (EMPLOYEE DATA DIRECTORY) */}
             {activeTab === 'employees' && (
               <EmployeeRosterView
-                employees={employees}
-                letters={letters}
-                files={files}
+                employees={visibleEmployees}
+                letters={visibleLetters}
+                files={visibleFiles}
                 onAddEmployee={() => {
                   setEditingEmployee(null);
                   setIsEmployeeModalOpen(true);
@@ -995,9 +1323,9 @@ export default function App() {
             {/* CORRESPONDENCE / DAK REGISTRY */}
             {activeTab === 'registry' && (
               <LettersRegistry
-                letters={letters}
-                files={files}
-                employees={employees}
+                letters={visibleLetters}
+                files={visibleFiles}
+                employees={visibleEmployees}
                 onViewLetter={(letter) => setViewingLetter(letter)}
                 onEditLetter={(letter) => {
                   setEditingLetter(letter);
@@ -1023,8 +1351,8 @@ export default function App() {
             {/* MASTER FILES & DOCKET TRACKING (FTS) */}
             {activeTab === 'files' && (
               <FilesDocketsView
-                files={files}
-                letters={letters}
+                files={visibleFiles}
+                letters={visibleLetters}
                 onCreateFile={handleCreateDocketFile}
                 onMoveFile={handleMoveDocketFile}
                 onUpdateFileCategory={handleUpdateFileCategory}
@@ -1042,19 +1370,18 @@ export default function App() {
                 currentUser={currentUser}
                 onSaveToRegistry={handleSaveLetter}
                 prefilledLetter={drafterPrefillLetter}
-                employees={employees}
+                employees={visibleEmployees}
                 prefilledEmployee={selectedEmployeeForStudio}
               />
             )}
 
-            {/* RTI FILE MANAGEMENT & AI REPLY LETTER STUDIO */}
+            {/* RTI MANAGEMENT & CORRESPONDENCE (ಮಾಹಿತಿ ಹಕ್ಕು ಪತ್ರ ವ್ಯಾವಹಾರಗಳು ಮತ್ತು ನಿರ್ವಹಣೆ) */}
             {activeTab === 'rti' && (
-              <RtiReplyStudio
-                rtiFiles={files}
-                selectedRtiFile={selectedRtiFileForReply}
-                onSaveToRegistry={handleSaveLetter}
-                onUpdateRtiFileStatus={handleUpdateRtiStatus}
-                onBackToFiles={() => setActiveTab('files')}
+              <RtiManagementView
+                currentUser={currentUser}
+                files={visibleFiles}
+                onSaveLetterToRegistry={handleSaveLetter}
+                showToast={showToast}
               />
             )}
 
@@ -1062,8 +1389,8 @@ export default function App() {
             {activeTab === 'circularStudio' && (
               <StatutoryCircularStudio
                 currentUser={currentUser}
-                files={files}
-                employees={employees}
+                files={visibleFiles}
+                employees={visibleEmployees}
                 onSaveLetter={handleSaveLetter}
                 onBackToHome={() => setActiveTab('home')}
               />
@@ -1162,6 +1489,51 @@ export default function App() {
           onRefreshFiles={fetchFiles}
           onOpenRtiReply={handleOpenRtiReplyStudio}
         />
+      )}
+
+      {/* MODAL 8: ಕಛೇರಿ ೫ ಅಧಿಕೃತ ಬಳಕೆದಾರರ ನಿರ್ವಹಣೆ & ನೋಂದಣಿ (5 Users Only Management) */}
+      <UserManagementModal
+        isOpen={isUserModalOpen}
+        onClose={() => {
+          setIsUserModalOpen(false);
+          getRegisteredOfficeUsers()
+            .then(list => setUserSlotsCount(list.length))
+            .catch(() => {});
+        }}
+        currentUser={currentUser}
+        onSelectUser={(user) => {
+          setCurrentUser(user);
+          const token = `edu-auth-session-${user.username}-${Date.now()}`;
+          localStorage.setItem('edu_efms_auth_user', JSON.stringify(user));
+          localStorage.setItem('edu_efms_auth_token', token);
+          showToast(`${user.displayName} ಖಾತೆಗೆ ಯಶಸ್ವಿಯಾಗಿ ಬದಲಾಯಿಸಲಾಗಿದೆ.`);
+        }}
+        showToast={showToast}
+      />
+
+      {/* MODAL 9: KCSR & RTI AI ಸಹಾಯಕ (GEMINI CHATBOT) */}
+      <KcsrRtiChatbot
+        isOpen={isAiChatOpen}
+        onClose={() => setIsAiChatOpen(false)}
+        currentUser={currentUser}
+      />
+
+      {/* FLOATING ACTION BUTTON: AI CHATBOT TRIGGER */}
+      {!isAiChatOpen && (
+        <button
+          id="floating-ai-chatbot-btn"
+          onClick={() => setIsAiChatOpen(true)}
+          className="fixed bottom-6 right-6 z-40 bg-gradient-to-r from-purple-800 via-indigo-900 to-[#2b2b2b] text-white px-4 py-3 rounded-2xl shadow-[4px_4px_0px_#f59e0b] border-2 border-[#2b2b2b] hover:shadow-[6px_6px_0px_#f59e0b] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all flex items-center gap-2.5 font-bold font-kannada cursor-pointer group no-print"
+          title="KCSR & RTI AI ಸಹಾಯಕ (Gemini 3.8 Flash) ಆರಂಭಿಸಿ"
+        >
+          <div className="w-7 h-7 rounded-xl bg-amber-400 text-stone-900 flex items-center justify-center shrink-0 shadow-sm group-hover:rotate-12 transition-transform">
+            <Sparkles className="w-4 h-4 fill-amber-900 text-stone-950" />
+          </div>
+          <div className="text-left leading-tight hidden sm:block">
+            <span className="block text-xs text-amber-300 font-bold font-kannada">KCSR & RTI</span>
+            <span className="block text-[11px] text-white/90">AI ಸಹಾಯಕ</span>
+          </div>
+        </button>
       )}
     </div>
   );

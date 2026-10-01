@@ -15,6 +15,7 @@ import {
   Database
 } from 'lucide-react';
 import { Employee, DepartmentSection } from '../types';
+import { saveBatchEmployeesToFirestore } from '../lib/firebase';
 
 interface EmployeeUploadModalProps {
   isOpen: boolean;
@@ -73,28 +74,36 @@ export const EmployeeUploadModal: React.FC<EmployeeUploadModalProps> = ({
       return;
     }
 
-    // Clean header names (supports Kannada and English aliases)
-    const headerRow = matrix[0].map(h => String(h || '').toLowerCase().replace(/[^a-z0-9]/g, ''));
+    // Clean header names (supports Kannada and English aliases without stripping Kannada characters)
+    const headerRow = matrix[0].map(h => String(h || '').toLowerCase().trim());
 
     const getIndex = (keys: string[]) => {
-      return headerRow.findIndex(h => keys.some(k => h.includes(k)));
+      return headerRow.findIndex(h => keys.some(k => h.includes(k.toLowerCase())));
     };
 
-    const codeIdx = getIndex(['code', 'empid', 'id', 'employeeid', 'number']);
-    const kgidIdx = getIndex(['kgid', 'kgidnumber', 'kgidno', 'insurance']);
-    const nameIdx = getIndex(['name', 'fullname', 'officer', 'staffname', 'employee']);
-    const desigIdx = getIndex(['desig', 'title', 'post', 'position', 'role']);
-    const secIdx = getIndex(['sec', 'dept', 'wing', 'department', 'branch']);
-    const locIdx = getIndex(['loc', 'office', 'posting', 'school', 'station', 'place']);
-    const emailIdx = getIndex(['email', 'mail']);
-    const phoneIdx = getIndex(['phone', 'contact', 'mobile', 'cell', 'tel']);
-    const basicPayIdx = getIndex(['basic', 'basicpay', 'salary', 'pay', 'moola', 'vethana']);
-    const typeIdx = getIndex(['type', 'employ', 'cadre']);
-    const statusIdx = getIndex(['status', 'state']);
-    const roleIdx = getIndex(['role', 'level', 'category']);
-    const dateIdx = getIndex(['date', 'join', 'doj']);
-    const qualIdx = getIndex(['qual', 'degree', 'edu', 'education']);
-    const notesIdx = getIndex(['note', 'remark', 'comment']);
+    let codeIdx = getIndex(['code', 'empid', 'id', 'employeeid', 'number', 'ಸಂಖ್ಯೆ', 'ಕೋಡ್']);
+    let kgidIdx = getIndex(['kgid', 'kgidnumber', 'kgidno', 'insurance', 'ಕೆಜಿಐಡಿ', 'ವಿಮೆ', 'ಕೆ.ಜಿ.ಐ.ಡಿ']);
+    let nameIdx = getIndex(['name', 'fullname', 'officer', 'staff', 'employee', 'ಹೆಸರು', 'ನೌಕರ', 'ಅಧಿಕಾರಿ', 'ಶಿಕ್ಷಕ', 'ಸಿಬ್ಬಂದಿ']);
+    let desigIdx = getIndex(['desig', 'title', 'post', 'position', 'role', 'ಹುದ್ದೆ', 'ಪದನಾಮ']);
+    let secIdx = getIndex(['sec', 'dept', 'wing', 'department', 'branch', 'ಶಾಖೆ', 'ವಿಭಾಗ']);
+    let locIdx = getIndex(['loc', 'office', 'posting', 'school', 'station', 'place', 'ಸ್ಥಳ', 'ಕಚೇರಿ', 'ಶಾಲೆ']);
+    let emailIdx = getIndex(['email', 'mail', 'ಇಮೇಲ್']);
+    let phoneIdx = getIndex(['phone', 'contact', 'mobile', 'cell', 'tel', 'ದೂರವಾಣಿ', 'ಮೊಬೈಲ್']);
+    let basicPayIdx = getIndex(['basic', 'basicpay', 'salary', 'pay', 'moola', 'vethana', 'ವೇತನ', 'ಮೂಲ ವೇತನ', 'ಸಂಬಳ']);
+    let typeIdx = getIndex(['type', 'employ', 'cadre', 'ವರ್ಗ']);
+    let statusIdx = getIndex(['status', 'state', 'ಸ್ಥಿತಿ']);
+    let roleIdx = getIndex(['role', 'level', 'category', 'ಪಾತ್ರ']);
+    let dateIdx = getIndex(['date', 'join', 'doj', 'ದಿನಾಂಕ', 'ಸೇರಿದ']);
+    let qualIdx = getIndex(['qual', 'degree', 'edu', 'education', 'ವಿದ್ಯಾರ್ಹತೆ', 'ಪದವಿ']);
+    let notesIdx = getIndex(['note', 'remark', 'comment', 'ಷರಾ', 'ವಿವರ']);
+
+    // Intelligent positional fallback if headers were ambiguous
+    if (nameIdx === -1 && matrix[0].length >= 2) {
+      nameIdx = matrix[0].length > 1 ? 1 : 0;
+    }
+    if (desigIdx === -1 && matrix[0].length >= 3) {
+      desigIdx = 2;
+    }
 
     const rows: ParsedRow[] = [];
 
@@ -371,6 +380,25 @@ EDN-BHD-105,KGID-543219,ಶ್ರೀ ಪ್ರಕಾಶ್ ಸಿ. ಜಿ.,ಸ�
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'Failed to upload employees');
+      }
+
+      // Persist to Firestore Cloud as permanent backup
+      try {
+        await saveBatchEmployeesToFirestore(payload);
+      } catch (fbErr) {
+        console.warn('Firestore backup note:', fbErr);
+      }
+
+      // Persist to localStorage client cache
+      try {
+        const cached = localStorage.getItem('edu_persistent_employees');
+        const existingList: any[] = cached ? JSON.parse(cached) : [];
+        const mergedMap = new Map<string, any>();
+        existingList.forEach(e => mergedMap.set(e.kgidNumber || e.employeeCode || e.id, e));
+        payload.forEach(e => mergedMap.set(e.kgidNumber || e.employeeCode || e.id, e));
+        localStorage.setItem('edu_persistent_employees', JSON.stringify(Array.from(mergedMap.values())));
+      } catch (lsErr) {
+        console.warn('localStorage cache note:', lsErr);
       }
 
       onUploadSuccess({

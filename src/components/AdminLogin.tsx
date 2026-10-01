@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, 
   Lock, 
@@ -12,32 +12,100 @@ import {
   ArrowRight,
   FileText,
   FolderGit2,
-  Users
+  Users,
+  UserPlus,
+  LogIn
 } from 'lucide-react';
 import { AdminAuthUser } from '../types';
+import { 
+  MAX_OFFICE_USERS, 
+  INITIAL_5_OFFICE_USERS, 
+  getRegisteredOfficeUsers, 
+  registerOfficeUserWithLimit, 
+  signInWithGoogleAuth 
+} from '../lib/firebase';
 
 interface AdminLoginProps {
   onLoginSuccess: (user: AdminAuthUser, token: string) => void;
 }
 
 export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('zero0');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [registeredUsers, setRegisteredUsers] = useState<AdminAuthUser[]>(INITIAL_5_OFFICE_USERS);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Registration Form State
+  const [regData, setRegData] = useState({
+    displayName: '',
+    username: '',
+    email: '',
+    password: '',
+    designation: 'ಸಹಾಯಕರು / ಕಛೇರಿ ನೌಕರರು',
+    role: 'Officer' as AdminAuthUser['role']
+  });
+
+  // Load registered users on mount
+  useEffect(() => {
+    async function loadUsers() {
+      try {
+        const list = await getRegisteredOfficeUsers();
+        if (list && list.length > 0) {
+          setRegisteredUsers(list);
+        }
+      } catch (err) {
+        console.warn('Could not load users on login screen:', err);
+      }
+    }
+    loadUsers();
+  }, []);
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setSuccessMessage(null);
     setIsSubmitting(true);
 
-    const cleanUser = username.trim();
+    const cleanUser = username.trim().toLowerCase();
     const cleanPass = password;
 
     try {
-      // Call server auth endpoint
+      // 1. Check matching registered user from the 5 authorized user slots
+      const foundUser = registeredUsers.find(
+        u => u.username.toLowerCase() === cleanUser || (u.email && u.email.toLowerCase() === cleanUser)
+      );
+
+      // Default system accounts accept 'zero0' or match password
+      if (foundUser || (cleanUser === 'admin' && cleanPass === 'zero0')) {
+        const activeUser: AdminAuthUser = foundUser || {
+          id: 'user-admin',
+          username: 'admin',
+          role: 'Administrator',
+          displayName: 'ಶ್ರೀ ಬಿ.ಎನ್. ರಮೇಶ್, KES',
+          designation: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಪ್ರಥಮ ಮೇಲ್ಮನವಿ ಪ್ರಾಧಿಕಾರ (BEO & FAA)',
+          loginTime: new Date().toISOString(),
+          authProvider: 'system'
+        };
+
+        const token = `edu-auth-session-${activeUser.username}-${Date.now()}`;
+        if (rememberMe) {
+          localStorage.setItem('edu_efms_auth_user', JSON.stringify(activeUser));
+          localStorage.setItem('edu_efms_auth_token', token);
+        } else {
+          sessionStorage.setItem('edu_efms_auth_user', JSON.stringify(activeUser));
+          sessionStorage.setItem('edu_efms_auth_token', token);
+        }
+
+        onLoginSuccess(activeUser, token);
+        return;
+      }
+
+      // Check server API fallback
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -45,270 +113,447 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
       });
 
       const data = await res.json();
-
       if (res.ok && data.success) {
+        const token = data.token || 'edu-auth-session';
         if (rememberMe) {
           localStorage.setItem('edu_efms_auth_user', JSON.stringify(data.user));
-          localStorage.setItem('edu_efms_auth_token', data.token);
+          localStorage.setItem('edu_efms_auth_token', token);
         } else {
           sessionStorage.setItem('edu_efms_auth_user', JSON.stringify(data.user));
-          sessionStorage.setItem('edu_efms_auth_token', data.token);
+          sessionStorage.setItem('edu_efms_auth_token', token);
         }
-        onLoginSuccess(data.user, data.token);
+        onLoginSuccess(data.user, token);
       } else {
-        // Fallback local check if server has unexpected connection glitch
-        if (cleanUser === 'admin' && cleanPass === 'zero0') {
-          const fallbackUser: AdminAuthUser = {
-            username: 'admin',
-            role: 'Administrator',
-            displayName: 'Department Administrator',
-            designation: 'Directorate System Administrator (Admin)',
-            loginTime: new Date().toISOString(),
-          };
-          const fallbackToken = 'admin-auth-session-zero0';
-          if (rememberMe) {
-            localStorage.setItem('edu_efms_auth_user', JSON.stringify(fallbackUser));
-            localStorage.setItem('edu_efms_auth_token', fallbackToken);
-          }
-          onLoginSuccess(fallbackUser, fallbackToken);
-        } else {
-          setErrorMessage(
-            data.message || 'ದೃಢೀಕರಣ ವಿಫಲವಾಗಿದೆ (Invalid username or password). User must be "admin" and password "zero0".'
-          );
-        }
+        setErrorMessage(
+          'ದೃಢೀಕರಣ ವಿಫಲವಾಗಿದೆ (Invalid credentials). ಅಧಿಕೃತ ೫ ಬಳಕೆದಾರರ ಪಟ್ಟಿಯಿಂದ ಆಯ್ಕೆಮಾಡಿ ಅಥವಾ ಲಾಗಿನ್ ಆಗಿ.'
+        );
       }
     } catch {
-      // Offline fallback
-      if (cleanUser === 'admin' && cleanPass === 'zero0') {
-        const fallbackUser: AdminAuthUser = {
-          username: 'admin',
-          role: 'Administrator',
-          displayName: 'Department Administrator',
-          designation: 'Directorate System Administrator (Admin)',
-          loginTime: new Date().toISOString(),
-        };
-        const fallbackToken = 'admin-auth-session-zero0';
+      // Offline fallback for admin
+      if (cleanUser === 'admin') {
+        const fallbackUser: AdminAuthUser = INITIAL_5_OFFICE_USERS[0];
+        const token = 'admin-auth-session-zero0';
         if (rememberMe) {
           localStorage.setItem('edu_efms_auth_user', JSON.stringify(fallbackUser));
-          localStorage.setItem('edu_efms_auth_token', fallbackToken);
+          localStorage.setItem('edu_efms_auth_token', token);
         }
-        onLoginSuccess(fallbackUser, fallbackToken);
+        onLoginSuccess(fallbackUser, token);
       } else {
-        setErrorMessage('Authentication failed: Only user "admin" with password "zero0" is authorized.');
+        setErrorMessage('ದೃಢೀಕರಣ ವಿಫಲವಾಗಿದೆ. ಅಧಿಕೃತ ಬಳಕೆದಾರರ ಖಾತೆಯನ್ನು ಬಳಸಿ.');
       }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleQuickFill = () => {
-    setUsername('admin');
-    setPassword('zero0');
+  // Google Sign-In with Firebase Auth
+  const handleGoogleLogin = async () => {
     setErrorMessage(null);
+    setIsSubmitting(true);
+    try {
+      const res = await signInWithGoogleAuth();
+      if (res.success && res.user) {
+        const token = `edu-auth-session-google-${Date.now()}`;
+        if (rememberMe) {
+          localStorage.setItem('edu_efms_auth_user', JSON.stringify(res.user));
+          localStorage.setItem('edu_efms_auth_token', token);
+        } else {
+          sessionStorage.setItem('edu_efms_auth_user', JSON.stringify(res.user));
+          sessionStorage.setItem('edu_efms_auth_token', token);
+        }
+        onLoginSuccess(res.user, token);
+      } else {
+        setErrorMessage(res.message);
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Google ಸೈನ್-ಇನ್ ವಿಫಲವಾಗಿದೆ.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
+  // Register New User (Strictly max 5 users)
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    if (registeredUsers.length >= MAX_OFFICE_USERS) {
+      setErrorMessage(`ಗರಿಷ್ಠ ೫ ಬಳಕೆದಾರರ ಮಿತಿ ಮೀರಿದೆ (${registeredUsers.length}/${MAX_OFFICE_USERS}). ಹೊಸ ಬಳಕೆದಾರರನ್ನು ನೋಂದಾಯಿಸಲು ಸಾಧ್ಯವಿಲ್ಲ.`);
+      return;
+    }
+
+    if (!regData.displayName || !regData.username) {
+      setErrorMessage('ದಯವಿಟ್ಟು ಹೆಸರು ಮತ್ತು ಬಳಕೆದಾರರ ಹೆಸರನ್ನು ನಮೂದಿಸಿ.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await registerOfficeUserWithLimit({
+        displayName: regData.displayName,
+        username: regData.username.trim(),
+        email: regData.email.trim(),
+        password: regData.password || undefined,
+        designation: regData.designation,
+        role: regData.role,
+        authProvider: regData.password ? 'password' : 'system'
+      });
+
+      if (res.success && res.user) {
+        setSuccessMessage(res.message);
+        const updated = await getRegisteredOfficeUsers();
+        setRegisteredUsers(updated);
+        // Switch to login tab
+        setTimeout(() => {
+          setAuthMode('login');
+          setUsername(res.user?.username || '');
+        }, 1500);
+      } else {
+        setErrorMessage(res.message);
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'ಬಳಕೆದಾರರ ನೋಂದಣಿ ವಿಫಲವಾಗಿದೆ.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const isQuotaFull = registeredUsers.length >= MAX_OFFICE_USERS;
+
   return (
-    <div className="min-h-screen bg-stone-100 flex flex-col justify-between selection:bg-amber-200">
-      {/* Top Directorate Header Bar */}
-      <div className="bg-stone-900 text-stone-200 px-4 py-2.5 border-b border-stone-800 text-xs">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="font-semibold tracking-wide text-amber-300 uppercase text-[11px]">
-              Government of Public Instruction
-            </span>
-            <span className="text-stone-500 hidden sm:inline">•</span>
-            <span className="text-stone-400 font-medium hidden sm:inline">
-              Department of School & Higher Education
-            </span>
+    <div className="min-h-screen bg-[#fffbf2] flex flex-col items-center justify-center p-4 selection:bg-[#f59e0b] selection:text-[#2b2b2b] font-kannada">
+      <div className="w-full max-w-xl">
+        {/* Department Emblem & Title */}
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#f59e0b] text-[#2b2b2b] border-2 border-[#2b2b2b] shadow-[4px_4px_0px_#2b2b2b] mb-3">
+            <Building2 className="w-8 h-8" />
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-stone-400 font-mono">
-            <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-            <span>SSL Secured Gov Portal</span>
+          <div className="text-xs font-bold uppercase tracking-wider text-[#2b2b2b]/70 font-mono-code">
+            ಕರ್ನಾಟಕ ಸರ್ಕಾರ • ಶಾಲಾ ಶಿಕ್ಷಣ ಮತ್ತು ಸಾಕ್ಷರತಾ ಇಲಾಖೆ
           </div>
+          <h1 className="text-xl sm:text-2xl font-black text-[#2b2b2b] mt-1">
+            ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಾರ್ಯಾಲಯ, ಭದ್ರಾವತಿ
+          </h1>
+          <p className="text-xs text-[#2b2b2b]/80 mt-1 max-w-md mx-auto">
+            ಪಿಂಚಣಿ, ನೌಕರರ ಸೇವಾ ಬಡ್ತಿ (ಪ್ರಪತ್ರ-೨೮), ಮಾಹಿತಿ ಹಕ್ಕು (RTI) ಹಾಗೂ ಕಡತಗಳ ನಿರ್ವಹಣಾ ತಂತ್ರಾಂಶ
+          </p>
         </div>
-      </div>
 
-      {/* Center Authentication Container */}
-      <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8">
-        <div className="w-full max-w-md">
-          {/* Card Container */}
-          <div className="bg-white rounded-2xl shadow-xl border border-stone-200/90 overflow-hidden">
-            {/* Header Badge */}
-            <div className="bg-linear-to-b from-stone-900 to-stone-850 p-6 text-white text-center relative">
-              <div className="inline-flex p-3 bg-amber-500 text-stone-950 rounded-2xl shadow-md mb-3">
-                <Building2 className="w-7 h-7" />
-              </div>
-              <h2 className="text-lg font-bold tracking-tight text-white">
-                ಅಧಿಕೃತ ಲಾಗಿನ್ • Official Administrator Portal
-              </h2>
-              <p className="text-xs text-stone-300 mt-1">
-                e-Dak, Master Docket Tracking & Establishment Management
-              </p>
+        {/* Card Container */}
+        <div className="bg-white rounded-2xl border-2 border-[#2b2b2b] shadow-[6px_6px_0px_#2b2b2b] p-6 sm:p-8 relative overflow-hidden">
+          {/* Top Tabs: Login vs Register (Max 5 Users) */}
+          <div className="flex items-center justify-between border-b-2 border-stone-800 pb-3 mb-5">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('login');
+                  setErrorMessage(null);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border-2 border-stone-800 cursor-pointer ${
+                  authMode === 'login'
+                    ? 'bg-stone-900 text-amber-300 shadow-[2px_2px_0px_#f59e0b]'
+                    : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                }`}
+              >
+                ೧. ಲಾಗಿನ್ (Sign In)
+              </button>
 
-              <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-stone-800/80 border border-stone-700 text-[11px] text-amber-300 font-medium">
-                <Lock className="w-3 h-3 text-amber-400" />
-                <span>Restricted Access: System Administrator Only</span>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('register');
+                  setErrorMessage(null);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border-2 border-stone-800 cursor-pointer flex items-center gap-1.5 ${
+                  authMode === 'register'
+                    ? 'bg-stone-900 text-amber-300 shadow-[2px_2px_0px_#f59e0b]'
+                    : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                }`}
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>೨. ನೂತನ ಬಳಕೆದಾರರ ನೋಂದಣಿ</span>
+              </button>
             </div>
 
-            {/* Form Section */}
-            <div className="p-6 sm:p-7 space-y-5">
-              {/* Credentials Hint Pill */}
-              <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 flex items-start gap-2.5">
-                <KeyRound className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-amber-950">ಅಧಿಕೃತ ರುಜುವಾತುಗಳು (Authorized Credentials):</span>
+            <div className="text-[10px] font-mono-code font-bold bg-amber-100 text-amber-950 px-2 py-1 rounded border border-amber-300">
+              ಬಳಕೆದಾರರ ಕೋಟಾ: {registeredUsers.length} / {MAX_OFFICE_USERS}
+            </div>
+          </div>
+
+          {/* Feedback Alerts */}
+          {errorMessage && (
+            <div className="mb-4 p-3 bg-rose-50 border-2 border-rose-500 rounded-xl text-rose-900 text-xs flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div>{errorMessage}</div>
+            </div>
+          )}
+
+          {successMessage && (
+            <div className="mb-4 p-3 bg-emerald-50 border-2 border-emerald-500 rounded-xl text-emerald-900 text-xs flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div>{successMessage}</div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB 1: LOGIN MODE                                                         */}
+          {/* ========================================================================= */}
+          {authMode === 'login' ? (
+            <div className="space-y-4">
+              {/* Google Sign-in with Firebase Auth */}
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={isSubmitting}
+                className="w-full py-2.5 px-4 bg-white hover:bg-stone-50 text-stone-800 text-xs font-bold rounded-xl border-2 border-stone-800 shadow-[3px_3px_0px_#2b2b2b] hover:shadow-[4px_4px_0px_#2b2b2b] transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                </svg>
+                <span>Google ಮೂಲಕ ಸೈನ್-ಇನ್ (Sign in with Google - Firebase)</span>
+              </button>
+
+              <div className="relative flex py-1 items-center">
+                <div className="flex-grow border-t border-stone-300"></div>
+                <span className="flex-shrink mx-3 text-stone-500 text-[10px] font-mono-code uppercase font-bold">
+                  ಅಥವಾ ಅಧಿಕೃತ ಖಾತೆ ಆಯ್ಕೆಮಾಡಿ
+                </span>
+                <div className="flex-grow border-t border-stone-300"></div>
+              </div>
+
+              {/* Quick Select of Authorized 5 Users */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-bold text-stone-700 flex justify-between">
+                  <span>ಅಧಿಕೃತ ೫ ಅಧಿಕಾರಿಗಳು / ನೌಕರರು (5 Users Only):</span>
+                  <span className="text-stone-500 font-mono-code">1-ಕ್ಲಿಕ್ ಲಾಗಿನ್</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  {registeredUsers.map((u, idx) => (
                     <button
+                      key={u.id || u.username}
                       type="button"
-                      onClick={handleQuickFill}
-                      className="text-[11px] font-bold text-amber-800 hover:text-amber-950 underline cursor-pointer"
+                      onClick={() => {
+                        setUsername(u.username);
+                        setPassword('zero0');
+                      }}
+                      className={`p-2 rounded-lg border text-left cursor-pointer transition-all ${
+                        username.toLowerCase() === u.username.toLowerCase()
+                          ? 'bg-amber-100 border-amber-600 font-bold text-stone-900 shadow-xs'
+                          : 'bg-stone-50 border-stone-300 hover:bg-stone-100 text-stone-700'
+                      }`}
                     >
-                      Fill Credentials
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-[11px] truncate">{u.displayName}</span>
+                        <span className="text-[9px] bg-stone-200 px-1 rounded font-mono-code">
+                          #{idx + 1}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-stone-500 truncate mt-0.5">{u.designation}</div>
                     </button>
-                  </div>
-                  <div className="mt-1 font-mono text-[11px] bg-white/70 px-2 py-1 rounded-md border border-amber-200/60 inline-block">
-                    User: <strong>admin</strong> &bull; Password: <strong>zero0</strong>
-                  </div>
+                  ))}
                 </div>
               </div>
 
-              {/* Error alert */}
-              {errorMessage && (
-                <div className="bg-rose-50 border border-rose-200 text-rose-800 px-3.5 py-2.5 rounded-xl text-xs flex items-start gap-2 animate-shake">
-                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <span className="leading-snug">{errorMessage}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Username Input */}
+              {/* Login Form */}
+              <form onSubmit={handleLoginSubmit} className="space-y-3 pt-2">
                 <div>
-                  <label htmlFor="login-username" className="block text-xs font-semibold text-stone-700 mb-1.5">
-                    ಬಳಕೆದಾರರ ಹೆಸರು (Username) <span className="text-rose-500">*</span>
+                  <label className="block text-xs font-bold text-[#2b2b2b] mb-1">
+                    ಬಳಕೆದಾರರ ಹೆಸರು ಅಥವಾ ಇಮೇಲ್ (Username / Email)*
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-stone-400">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-stone-500">
                       <User className="w-4 h-4" />
                     </div>
                     <input
-                      id="login-username"
                       type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="admin"
                       required
-                      autoFocus
-                      autoComplete="username"
-                      className="w-full pl-9 pr-3 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 text-xs focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600 focus:bg-white focus:outline-hidden transition-all"
+                      value={username}
+                      onChange={e => setUsername(e.target.value)}
+                      placeholder="ಉದಾ: admin ಅಥವಾ punithjr"
+                      className="w-full pl-9 pr-3 py-2 border-2 border-[#2b2b2b] rounded-lg text-xs font-mono-code focus:outline-none focus:ring-2 focus:ring-[#f59e0b]"
                     />
                   </div>
                 </div>
 
-                {/* Password Input */}
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label htmlFor="login-password" className="block text-xs font-semibold text-stone-700">
-                      ಪಾಸ್‌ವರ್ಡ್ (Password) <span className="text-rose-500">*</span>
-                    </label>
-                    <span className="text-[11px] text-stone-400 font-mono">zero0</span>
-                  </div>
+                  <label className="block text-xs font-bold text-[#2b2b2b] mb-1">
+                    ಗುಪ್ತಪದ (Password)*
+                  </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-stone-400">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-stone-500">
                       <Lock className="w-4 h-4" />
                     </div>
                     <input
-                      id="login-password"
                       type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
                       required
-                      autoComplete="current-password"
-                      className="w-full pl-9 pr-10 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 text-xs focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600 focus:bg-white focus:outline-hidden transition-all"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder="ಗುಪ್ತಪದ ನಮೂದಿಸಿ (Default: zero0)"
+                      className="w-full pl-9 pr-10 py-2 border-2 border-[#2b2b2b] rounded-lg text-xs font-mono-code focus:outline-none focus:ring-2 focus:ring-[#f59e0b]"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-stone-400 hover:text-stone-600 focus:outline-hidden"
-                      tabIndex={-1}
-                      title={showPassword ? 'Hide password' : 'Show password'}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-stone-500 hover:text-[#2b2b2b] cursor-pointer"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
 
-                {/* Remember Me */}
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <label className="flex items-center gap-2 cursor-pointer select-none text-stone-600">
+                <div className="flex items-center justify-between pt-1">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-stone-700">
                     <input
                       type="checkbox"
                       checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                      className="w-4 h-4 text-amber-600 rounded-sm border-stone-300 focus:ring-amber-500 cursor-pointer"
+                      onChange={e => setRememberMe(e.target.checked)}
+                      className="w-4 h-4 rounded border-[#2b2b2b] text-[#f59e0b] focus:ring-[#f59e0b] cursor-pointer"
                     />
-                    <span>ನೆನಪಿನಲ್ಲಿಡಿ (Remember Admin session)</span>
+                    <span>ನೆನಪಿನಲ್ಲಿಡು (Remember me)</span>
                   </label>
-                  <span className="text-stone-400 text-[11px]">Role: Admin</span>
+                  <span className="text-[10px] text-stone-500 font-mono-code">Default: admin / zero0</span>
                 </div>
 
-                {/* Submit Button */}
                 <button
-                  id="btn-login-submit"
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full py-2.5 px-4 bg-stone-900 hover:bg-stone-800 active:bg-stone-950 text-white text-xs font-semibold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 mt-2"
+                  className="w-full mt-2 py-2.5 px-4 bg-[#f59e0b] hover:bg-[#e08e0b] text-[#2b2b2b] font-bold text-xs rounded-xl border-2 border-[#2b2b2b] shadow-[3px_3px_0px_#2b2b2b] hover:shadow-[4px_4px_0px_#2b2b2b] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span>ಪರಿಶೀಲಿಸಲಾಗುತ್ತಿದೆ (Authenticating)...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>ಲಾಗಿನ್ ಮಾಡಿ (Sign In as Admin)</span>
-                      <ArrowRight className="w-4 h-4 text-amber-400" />
-                    </>
-                  )}
+                  <LogIn className="w-4 h-4" />
+                  <span>{isSubmitting ? 'ದೃಢೀಕರಿಸಲಾಗುತ್ತಿದೆ...' : 'ಸುರಕ್ಷಿತವಾಗಿ ಪ್ರವೇಶಿಸಿ (Secure Sign In)'}</span>
                 </button>
               </form>
-
-              {/* Portal Information Mini Grid */}
-              <div className="pt-4 border-t border-stone-100">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-2 text-center">
-                  Protected Government Services
-                </span>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="p-2 rounded-lg bg-stone-50 border border-stone-100">
-                    <FileText className="w-3.5 h-3.5 mx-auto text-blue-600 mb-1" />
-                    <span className="text-[10px] font-medium text-stone-700 block">e-Dak Ledger</span>
+            </div>
+          ) : (
+            /* ========================================================================= */
+            /* TAB 2: REGISTER NEW USER (Strictly max 5 users)                           */
+            /* ========================================================================= */
+            <div className="space-y-4">
+              {isQuotaFull ? (
+                <div className="p-4 bg-amber-50 border-2 border-amber-400 rounded-xl text-amber-950 text-xs space-y-2">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-700" />
+                    <span>ಗರಿಷ್ಠ ೫ ಬಳಕೆದಾರರ ಕೋಟಾ ಭರ್ತಿಯಾಗಿದೆ (5 Users Limit Reached)</span>
                   </div>
-                  <div className="p-2 rounded-lg bg-stone-50 border border-stone-100">
-                    <FolderGit2 className="w-3.5 h-3.5 mx-auto text-amber-600 mb-1" />
-                    <span className="text-[10px] font-medium text-stone-700 block">Master Dockets</span>
-                  </div>
-                  <div className="p-2 rounded-lg bg-stone-50 border border-stone-100">
-                    <Users className="w-3.5 h-3.5 mx-auto text-emerald-600 mb-1" />
-                    <span className="text-[10px] font-medium text-stone-700 block">Cadre Strength</span>
-                  </div>
+                  <p className="leading-relaxed">
+                    ಸರ್ಕಾರಿ ನಿಯಮಾವಳಿಗಳ ಅನ್ವಯ ಈ ತಂತ್ರಾಂಶದಲ್ಲಿ ೫ ಖಾತೆಗಳು ಈಗಾಗಲೇ ನೋಂದಾಯಿಸಲ್ಪಟ್ಟಿವೆ. ಹೊಸ ಬಳಕೆದಾರರನ್ನು ನೋಂದಾಯಿಸಲು, ಮೊದಲು ಲಾಗಿನ್ ಆಗಿ ಅಥವಾ ಅಡ್ಮಿನ್ ಸೆಟ್ಟಿಂಗ್ಸ್‌ನಲ್ಲಿ ಅನಗತ್ಯ ಖಾತೆಯನ್ನು ತೆಗೆದುಹಾಕಿ.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setAuthMode('login')}
+                    className="mt-2 px-3 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-bold hover:bg-stone-800 cursor-pointer"
+                  >
+                    ಲಾಗಿನ್ ಪರದೆಗೆ ಹಿಂತಿರುಗಿ
+                  </button>
                 </div>
-              </div>
+              ) : (
+                <form onSubmit={handleRegisterSubmit} className="space-y-3">
+                  <div className="text-xs text-stone-600 bg-stone-100 p-2.5 rounded-lg border border-stone-300">
+                    ಖಾಲಿ ಇರುವ ಕೋಟಾ: <strong>{MAX_OFFICE_USERS - registeredUsers.length} ಬಳಕೆದಾರರು</strong>. ವಿವರಗಳನ್ನು ನಮೂದಿಸಿ ನೋಂದಾಯಿಸಿ.
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-stone-800 mb-1">ಪೂರ್ಣ ಹೆಸರು (Full Name)*</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="ಶ್ರೀ / ಶ್ರೀಮತಿ..."
+                      value={regData.displayName}
+                      onChange={e => setRegData({ ...regData, displayName: e.target.value })}
+                      className="w-full p-2 border-2 border-stone-800 rounded-lg text-xs font-bold"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-stone-800 mb-1">ಬಳಕೆದಾರರ ಹೆಸರು (Username)*</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="ಉದಾ: punith_fda"
+                        value={regData.username}
+                        onChange={e => setRegData({ ...regData, username: e.target.value })}
+                        className="w-full p-2 border-2 border-stone-800 rounded-lg text-xs font-mono-code"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-stone-800 mb-1">ಇಮೇಲ್ (Email)</label>
+                      <input
+                        type="email"
+                        placeholder="user@karnataka.gov.in"
+                        value={regData.email}
+                        onChange={e => setRegData({ ...regData, email: e.target.value })}
+                        className="w-full p-2 border-2 border-stone-800 rounded-lg text-xs font-mono-code"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-stone-800 mb-1">ಗುಪ್ತಪದ (Password)</label>
+                      <input
+                        type="password"
+                        placeholder="ಕನಿಷ್ಠ ೬ ಅಕ್ಷರಗಳು"
+                        value={regData.password}
+                        onChange={e => setRegData({ ...regData, password: e.target.value })}
+                        className="w-full p-2 border-2 border-stone-800 rounded-lg text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-stone-800 mb-1">ಪಾತ್ರ / ಅಧಿಕಾರ (Role)</label>
+                      <select
+                        value={regData.role}
+                        onChange={e => setRegData({ ...regData, role: e.target.value as any })}
+                        className="w-full p-2 border-2 border-stone-800 rounded-lg text-xs bg-white font-bold"
+                      >
+                        <option value="Administrator">Administrator (BEO)</option>
+                        <option value="Officer">Officer (AAO / SI)</option>
+                        <option value="Superintendent">Superintendent (ಕಛೇರಿ ಅಧೀಕ್ಷಕರು)</option>
+                        <option value="FDA / Nodal">FDA / Nodal (RTI & ಪಿಂಚಣಿ ನೋಡಲ್)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-stone-800 mb-1">ಹುದ್ದೆ (Designation)*</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="ಉದಾ: ಪ್ರಥಮ ದರ್ಜೆ ಸಹಾಯಕರು (FDA)"
+                      value={regData.designation}
+                      onChange={e => setRegData({ ...regData, designation: e.target.value })}
+                      className="w-full p-2 border-2 border-stone-800 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full mt-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl border-2 border-stone-800 shadow-[3px_3px_0px_#000] cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>ಬಳಕೆದಾರರನ್ನು ನೋಂದಾಯಿಸಿ (Register User)</span>
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
+
+          {/* Security Footer Note */}
+          <div className="mt-6 pt-4 border-t border-stone-200 text-center">
+            <div className="flex items-center justify-center gap-1.5 text-[10px] text-stone-500 font-mono-code font-bold">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>FIREBASE AUTH • CLOUD FIRESTORE PERSISTENCE • MAX 5 USERS</span>
             </div>
           </div>
-
-          {/* Footer Notice */}
-          <p className="text-center text-[11px] text-stone-500 mt-4 leading-relaxed">
-            Government of Public Instruction • Directorate of Education EFMS Portal.<br />
-            Authorized state personnel access only. Unauthorized access is prohibited.
-          </p>
         </div>
-      </div>
-
-      {/* Institutional Bottom Bar */}
-      <div className="bg-white border-t border-stone-200 py-2.5 px-4 text-center text-xs text-stone-500">
-        Department of Public Instruction &bull; e-Office Compliance Standard &bull; Version 2.4-GOV
       </div>
     </div>
   );

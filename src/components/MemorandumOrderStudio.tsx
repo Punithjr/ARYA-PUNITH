@@ -128,8 +128,96 @@ export const MemorandumOrderStudio: React.FC<MemorandumOrderStudioProps> = ({
     { kgid: '621849', name: 'ಪಾರ್ವತಮ್ಮ ಬಿ.', desc: 'ಗಳಿಕೆ ರಜೆ / 10 ವರ್ಷ' },
   ];
 
-  // Load Order Types & Pay Rules on mount
+  // Dynamic DDO Signatory State dynamically pulled from employee isDdo flag or office config
+  const [ddoOfficer, setDdoOfficer] = useState<{
+    name: string;
+    designation: string;
+    office: string;
+    code: string;
+    kgid?: string;
+  }>(() => {
+    const ddoEmp = employees?.find(e => e.isDdo === true) || 
+                   employees?.find(e => e.designation?.toLowerCase().includes('ddo')) ||
+                   employees?.find(e => e.designation?.includes('ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿ'));
+    if (ddoEmp) {
+      return {
+        name: ddoEmp.fullName,
+        designation: ddoEmp.designation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ',
+        office: ddoEmp.placeOfWork || ddoEmp.officeLocation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
+        code: ddoEmp.ddoCode || '14041ED001',
+        kgid: ddoEmp.kgidNumber,
+      };
+    }
+    return {
+      name: 'ಹೆಚ್. ರವಿಕುಮಾರ್',
+      designation: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ',
+      office: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
+      code: '14041ED001',
+      kgid: '108294',
+    };
+  });
+
+  // Load Order Types & Pay Rules and dynamically sync DDO signatory on mount
   useEffect(() => {
+    const syncDdoSignatory = async () => {
+      // 1. Search employees list for isDdo flag (prioritizing explicit isDdo === true)
+      let ddoEmp = employees.find(e => e.isDdo === true) || 
+                   employees.find(e => e.designation?.toLowerCase().includes('ddo')) ||
+                   employees.find(e => e.designation?.includes('ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿ'));
+
+      // If employees list prop is not yet loaded, query API to resolve DDO
+      if (!ddoEmp && employees.length === 0) {
+        try {
+          const empRes = await fetch('/api/employees');
+          if (empRes.ok) {
+            const empData = await empRes.json();
+            const list: Employee[] = empData.employees || [];
+            ddoEmp = list.find(e => e.isDdo === true) ||
+                     list.find(e => e.designation?.toLowerCase().includes('ddo')) ||
+                     list.find(e => e.designation?.includes('ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿ'));
+          }
+        } catch (e) {
+          console.warn('Failed to load employees for DDO signatory sync:', e);
+        }
+      }
+
+      fetch('/api/memorandum/office-config')
+        .then(res => res.json())
+        .then(data => {
+          const cfg = data.office || data.config || null;
+          if (ddoEmp) {
+            setDdoOfficer({
+              name: ddoEmp.fullName,
+              designation: ddoEmp.designation || cfg?.ddoDesignation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ',
+              office: ddoEmp.placeOfWork || ddoEmp.officeLocation || cfg?.ddoOfficeName || cfg?.officeNameKannada || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
+              code: ddoEmp.ddoCode || cfg?.ddoCode || '14041ED001',
+              kgid: ddoEmp.kgidNumber,
+            });
+          } else if (cfg && (cfg.ddoOfficerName || cfg.officerName)) {
+            setDdoOfficer({
+              name: cfg.ddoOfficerName || cfg.officerName,
+              designation: cfg.ddoDesignation || cfg.officerDesignation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ',
+              office: cfg.ddoOfficeName || cfg.officeNameKannada || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
+              code: cfg.ddoCode || '14041ED001',
+              kgid: cfg.ddoKgidNumber,
+            });
+          }
+        })
+        .catch(err => {
+          if (ddoEmp) {
+            setDdoOfficer({
+              name: ddoEmp.fullName,
+              designation: ddoEmp.designation,
+              office: ddoEmp.placeOfWork || ddoEmp.officeLocation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
+              code: ddoEmp.ddoCode || '14041ED001',
+              kgid: ddoEmp.kgidNumber,
+            });
+          }
+        });
+    };
+
+    syncDdoSignatory();
+
     fetch('/api/memorandum/order-types')
       .then(res => res.json())
       .then(data => {
@@ -143,7 +231,7 @@ export const MemorandumOrderStudio: React.FC<MemorandumOrderStudioProps> = ({
         if (data.payRules) setPayRulesList(data.payRules);
       })
       .catch(err => console.error('Failed to load pay rules:', err));
-  }, []);
+  }, [employees]);
 
   // Recalculate when order type, employee, or parameters change
   useEffect(() => {
@@ -399,6 +487,10 @@ export const MemorandumOrderStudio: React.FC<MemorandumOrderStudioProps> = ({
       effectiveDate: isLeave ? leaveFrom : effectiveDate,
       officialRemarks: officialRemarks || undefined,
       employeeData: employee,
+      signatoryName: ddoOfficer.name,
+      signatoryDesignation: ddoOfficer.designation,
+      signatoryOffice: ddoOfficer.office,
+      ddoCode: ddoOfficer.code,
       leaveDetails: isLeave ? {
         leaveType: selectedOrderType,
         leaveFrom,
@@ -460,8 +552,8 @@ export const MemorandumOrderStudio: React.FC<MemorandumOrderStudioProps> = ({
           orderText: `ಶ್ರೀ/ಶ್ರೀಮತಿ ${employee.fullName}, ${employee.designation}, ಕೆಜಿಐಡಿ: ${employee.kgidNumber} ಇವರಿಗೆ ${selectedOrderType} ಮಂಜೂರು ಮಾಡಲಾಗಿದೆ.`,
           officialRemarks: officialRemarks || undefined,
           leaveDetails: orderData.leaveDetails,
-          signatoryName: 'ಹೆಚ್. ರವಿಕುಮಾರ್',
-          signatoryDesignation: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು, ಸಾರ್ವಜನಿಕ ಶಿಕ್ಷಣ ಇಲಾಖೆ, ಭದ್ರಾವತಿ',
+          signatoryName: ddoOfficer.name,
+          signatoryDesignation: `${ddoOfficer.designation}, ${ddoOfficer.office}`,
           copiesForwardedTo: [
             `ಮುಖ್ಯೋಪಾಧ್ಯಾಯರು, ${employee.officeLocation}`,
             `ಸಹಾಯಕ ನಿರ್ದೇಶಕರು (ವೇತನ & ಲೆಕ್ಕ), ಬಿಇಒ ಕಛೇರಿ, ಭದ್ರಾವತಿ`,
@@ -472,6 +564,41 @@ export const MemorandumOrderStudio: React.FC<MemorandumOrderStudioProps> = ({
           createdRole: currentUser?.role || 'Admin',
           createdAt: nowStr,
         };
+
+        const fallbackHtml = `
+          <div class="memorandum-doc fit-paper-a4 p-8 bg-white font-sans text-stone-900 max-w-4xl mx-auto border border-stone-300">
+            <div class="text-center border-b border-stone-800 pb-2 mb-2">
+              <h1 class="text-sm font-bold text-stone-900">ಕರ್ನಾಟಕ ಸರ್ಕಾರ</h1>
+              <h2 class="text-xs font-semibold text-stone-800">ಶಾಲಾ ಶಿಕ್ಷಣ ಮತ್ತು ಸಾಕ್ಷರತಾ ಇಲಾಖೆ</h2>
+              <h3 class="text-xs font-bold text-sky-950 mt-0.5">ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು</h3>
+              <p class="text-[10px] text-stone-600">ಬಿ.ಹೆಚ್. ರಸ್ತೆ, ಹಳೇನಗರ, ಭದ್ರಾವತಿ, ಶಿವಮೊಗ್ಗ ಜಿಲ್ಲೆ - 577301</p>
+            </div>
+            <div class="flex justify-between items-center text-[11px] font-mono mb-2 border-b pb-1">
+              <div>ಸಂ: <span class="font-bold">${ordNo}</span></div>
+              <div>ದಿನಾಂಕ: <span>${nowStr}</span></div>
+            </div>
+            <div class="text-center mb-2">
+              <span class="text-xs font-bold uppercase bg-stone-100 px-3 py-1 border rounded">ಅಧಿಕೃತ ಜ್ಞಾಪನ</span>
+            </div>
+            <p class="text-xs mb-2"><strong>ವಿಷಯ:</strong> ${fallbackOrder.subject}</p>
+            <p class="text-xs mb-2"><strong>ಪ್ರಸ್ತಾವನೆ:</strong> ${fallbackOrder.preamble}</p>
+            <p class="text-xs leading-relaxed mb-4 indent-6">${fallbackOrder.orderText}</p>
+            <div class="mt-6 flex justify-end">
+              <div class="text-center min-w-52 space-y-1">
+                <p class="text-xs text-stone-700">ಸಹಿ/-</p>
+                <p class="font-bold text-sm text-stone-950">(${ddoOfficer.name})</p>
+                <p class="text-xs font-bold text-stone-900">${ddoOfficer.designation}</p>
+                <p class="text-[11px] text-stone-800">${ddoOfficer.office}</p>
+              </div>
+            </div>
+            <div class="mt-4 pt-2 border-t text-[10px] text-stone-600">
+              <p class="font-bold">ಪ್ರತಿಯನ್ನು ಮಾಹಿತಿ ಮತ್ತು ಸೂಕ್ತ ಮುಂದಿನ ಕ್ರಮಕ್ಕಾಗಿ ರವಾನಿಸಲಾಗಿದೆ:</p>
+              <p>೧. ಮುಖ್ಯೋಪಾಧ್ಯಾಯರು, ${employee.officeLocation}</p>
+              <p>೨. ಸಹಾಯಕ ನಿರ್ದೇಶಕರು (ವೇತನ & ಲೆಕ್ಕ), ಬಿಇಒ ಕಛೇರಿ, ಭದ್ರಾವತಿ</p>
+              <p>೩. ಕಛೇರಿ ಕಡತಕ್ಕೆ</p>
+            </div>
+          </div>
+        `;
 
         const fallbackFile: OrderFile = {
           id: `file-${Date.now()}`,
@@ -486,8 +613,8 @@ export const MemorandumOrderStudio: React.FC<MemorandumOrderStudioProps> = ({
           newBasicPay: newPay,
           createdBy: currentUser?.displayName || 'Admin',
           createdDate: nowStr,
-          generatedDocumentHtml: `<div>ಆದೇಶ ಸಂ: ${ordNo}</div>`,
-          generatedDocumentText: `ಆದೇಶ ಸಂ: ${ordNo}\nವಿಷಯ: ${fallbackOrder.subject}`,
+          generatedDocumentHtml: fallbackHtml,
+          generatedDocumentText: `ಆದೇಶ ಸಂ: ${ordNo}\nವಿಷಯ: ${fallbackOrder.subject}\nಸಹಿ: ${ddoOfficer.name}, ${ddoOfficer.designation}`,
           fileSize: '14.2 KB',
         };
 
@@ -524,8 +651,8 @@ export const MemorandumOrderStudio: React.FC<MemorandumOrderStudioProps> = ({
         orderText: `ಶ್ರೀ/ಶ್ರೀಮತಿ ${employee.fullName}, ${employee.designation}, ಕೆಜಿಐಡಿ: ${employee.kgidNumber} ಇವರಿಗೆ ${selectedOrderType} ಮಂಜೂರು ಮಾಡಲಾಗಿದೆ.`,
         officialRemarks: officialRemarks || undefined,
         leaveDetails: orderData.leaveDetails,
-        signatoryName: 'ಹೆಚ್. ರವಿಕುಮಾರ್',
-        signatoryDesignation: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು, ಸಾರ್ವಜನಿಕ ಶಿಕ್ಷಣ ಇಲಾಖೆ, ಭದ್ರಾವತಿ',
+        signatoryName: ddoOfficer.name,
+        signatoryDesignation: `${ddoOfficer.designation}, ${ddoOfficer.office}`,
         copiesForwardedTo: [
           `ಮುಖ್ಯೋಪಾಧ್ಯಾಯರು, ${employee.officeLocation}`,
           `ಸಹಾಯಕ ನಿರ್ದೇಶಕರು (ವೇತನ & ಲೆಕ್ಕ), ಬಿಇಒ ಕಛೇರಿ, ಭದ್ರಾವತಿ`,
@@ -536,6 +663,41 @@ export const MemorandumOrderStudio: React.FC<MemorandumOrderStudioProps> = ({
         createdRole: currentUser?.role || 'Admin',
         createdAt: nowStr,
       };
+
+      const fallbackHtml = `
+        <div class="memorandum-doc fit-paper-a4 p-8 bg-white font-sans text-stone-900 max-w-4xl mx-auto border border-stone-300">
+          <div class="text-center border-b border-stone-800 pb-2 mb-2">
+            <h1 class="text-sm font-bold text-stone-900">ಕರ್ನಾಟಕ ಸರ್ಕಾರ</h1>
+            <h2 class="text-xs font-semibold text-stone-800">ಶಾಲಾ ಶಿಕ್ಷಣ ಮತ್ತು ಸಾಕ್ಷರತಾ ಇಲಾಖೆ</h2>
+            <h3 class="text-xs font-bold text-sky-950 mt-0.5">ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು</h3>
+            <p class="text-[10px] text-stone-600">ಬಿ.ಹೆಚ್. ರಸ್ತೆ, ಹಳೇನಗರ, ಭದ್ರಾವತಿ, ಶಿವಮೊಗ್ಗ ಜಿಲ್ಲೆ - 577301</p>
+          </div>
+          <div class="flex justify-between items-center text-[11px] font-mono mb-2 border-b pb-1">
+            <div>ಸಂ: <span class="font-bold">${ordNo}</span></div>
+            <div>ದಿನಾಂಕ: <span>${nowStr}</span></div>
+          </div>
+          <div class="text-center mb-2">
+            <span class="text-xs font-bold uppercase bg-stone-100 px-3 py-1 border rounded">ಅಧಿಕೃತ ಜ್ಞಾಪನ</span>
+          </div>
+          <p class="text-xs mb-2"><strong>ವಿಷಯ:</strong> ${fallbackOrder.subject}</p>
+          <p class="text-xs mb-2"><strong>ಪ್ರಸ್ತಾವನೆ:</strong> ${fallbackOrder.preamble}</p>
+          <p class="text-xs leading-relaxed mb-4 indent-6">${fallbackOrder.orderText}</p>
+          <div class="mt-6 flex justify-end">
+            <div class="text-center min-w-52 space-y-1">
+              <p class="text-xs text-stone-700">ಸಹಿ/-</p>
+              <p class="font-bold text-sm text-stone-950">(${ddoOfficer.name})</p>
+              <p class="text-xs font-bold text-stone-900">${ddoOfficer.designation}</p>
+              <p class="text-[11px] text-stone-800">${ddoOfficer.office}</p>
+            </div>
+          </div>
+          <div class="mt-4 pt-2 border-t text-[10px] text-stone-600">
+            <p class="font-bold">ಪ್ರತಿಯನ್ನು ಮಾಹಿತಿ ಮತ್ತು ಸೂಕ್ತ ಮುಂದಿನ ಕ್ರಮಕ್ಕಾಗಿ ರವಾನಿಸಲಾಗಿದೆ:</p>
+            <p>೧. ಮುಖ್ಯೋಪಾಧ್ಯಾಯರು, ${employee.officeLocation}</p>
+            <p>೨. ಸಹಾಯಕ ನಿರ್ದೇಶಕರು (ವೇತನ & ಲೆಕ್ಕ), ಬಿಇಒ ಕಛೇರಿ, ಭದ್ರಾವತಿ</p>
+            <p>೩. ಕಛೇರಿ ಕಡತಕ್ಕೆ</p>
+          </div>
+        </div>
+      `;
 
       const fallbackFile: OrderFile = {
         id: `file-${Date.now()}`,
@@ -550,8 +712,8 @@ export const MemorandumOrderStudio: React.FC<MemorandumOrderStudioProps> = ({
         newBasicPay: newPay,
         createdBy: currentUser?.displayName || 'Admin',
         createdDate: nowStr,
-        generatedDocumentHtml: `<div>ಆದೇಶ ಸಂ: ${ordNo}</div>`,
-        generatedDocumentText: `ಆದೇಶ ಸಂ: ${ordNo}\nವಿಷಯ: ${fallbackOrder.subject}`,
+        generatedDocumentHtml: fallbackHtml,
+        generatedDocumentText: `ಆದೇಶ ಸಂ: ${ordNo}\nವಿಷಯ: ${fallbackOrder.subject}\nಸಹಿ: ${ddoOfficer.name}, ${ddoOfficer.designation}`,
         fileSize: '14.2 KB',
       };
 
@@ -667,6 +829,28 @@ export const MemorandumOrderStudio: React.FC<MemorandumOrderStudioProps> = ({
               <RotateCcw className="w-4 h-4" />
               ನೂತನ ಆದೇಶ ಪ್ರಕ್ರಿಯೆ
             </button>
+          </div>
+        </div>
+
+        {/* Dynamic DDO Signatory Indicator Banner */}
+        <div className="mt-3 p-3 bg-amber-50/90 border-2 border-[#2b2b2b] rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-[2px_2px_0px_#2b2b2b]">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-2 py-0.5 rounded bg-[#2b2b2b] text-[#f59e0b] font-bold text-[10px] font-mono-code">
+              DDO SIGNATORY
+            </span>
+            <span className="font-bold text-xs text-stone-900 font-kannada">
+              ಅಧಿಕೃತ ಸಹಿ ಪ್ರಾಧಿಕಾರ (DDO):
+            </span>
+            <span className="font-bold text-xs text-emerald-950 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-400 font-kannada flex items-center gap-1">
+              <Check className="w-3.5 h-3.5 text-emerald-700" />
+              <span>{ddoOfficer.name}</span>
+            </span>
+            <span className="text-xs text-stone-700 font-medium">
+              ({ddoOfficer.designation})
+            </span>
+          </div>
+          <div className="text-[11px] text-stone-600 font-kannada">
+            ಕಛೇರಿ: <strong>{ddoOfficer.office}</strong> • ಕೋಡ್: <span className="font-mono font-bold text-stone-900">{ddoOfficer.code}</span>
           </div>
         </div>
       </div>
@@ -1475,6 +1659,12 @@ export const MemorandumOrderStudio: React.FC<MemorandumOrderStudioProps> = ({
               <div className="flex justify-between border-b border-stone-200 pb-1.5">
                 <span className="text-stone-600">ಜಾರಿಗೆ ಬರುವ ದಿನಾಂಕ:</span>
                 <strong className="font-mono">{isLeaveType ? leaveFrom : effectiveDate}</strong>
+              </div>
+              <div className="flex justify-between border-b border-stone-200 pb-1.5 bg-amber-50/80 p-2 rounded border border-amber-300">
+                <span className="text-stone-800 font-bold">ಸಹಿ ಪ್ರಾಧಿಕಾರ (DDO Signatory):</span>
+                <span className="text-stone-950 font-bold">
+                  {ddoOfficer.name} ({ddoOfficer.designation})
+                </span>
               </div>
 
               {!isLeaveType ? (

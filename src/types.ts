@@ -101,6 +101,7 @@ export interface EducationLetter {
   fileLetterNumber?: string; // e.g. 45-1, 45-2
   sectionCode?: string; // e.g. ಆ1
   sectionName?: string; // e.g. ಸ.ಪ್ರಾ.ಶಿ
+  createdBy?: string; // ಬಳಕೆದಾರರು (Admin ಅಥವಾ ಬಳಕೆದಾರ ೧-೫)
 }
 
 export interface FileMovementRecord {
@@ -161,6 +162,7 @@ export interface MasterDocketFile {
   isRtiFile?: boolean;
   rtiDetails?: RtiDocketDetails;
   attachments?: DocumentAttachment[];
+  createdBy?: string; // ಕಡತ ಸೃಜಿಸಿದ ಬಳಕೆದಾರರು (Admin / User-1 to 5)
 }
 
 export interface DakRegisterSummary {
@@ -246,11 +248,15 @@ export interface ServiceSanctionRecord {
 }
 
 export interface AdminAuthUser {
+  id?: string;
   username: string;
-  role: 'Admin' | 'Administrator' | 'Data Entry Operator' | 'Viewer';
+  email?: string;
+  role: 'Admin' | 'Administrator' | 'Data Entry Operator' | 'Viewer' | 'Officer' | 'Superintendent' | 'FDA / Nodal';
   displayName: string;
   designation: string;
   loginTime: string;
+  photoURL?: string;
+  authProvider?: 'google' | 'password' | 'system';
 }
 
 export type CadreGroup = 'ಗ್ರೂಪ್-ಎ' | 'ಗ್ರೂಪ್-ಬಿ' | 'ಗ್ರೂಪ್-ಸಿ' | 'ಗ್ರೂಪ್-ಡಿ';
@@ -273,9 +279,20 @@ export interface Employee {
   lastIncrementDate?: string; // ಹಿಂದಿನ ವೇತನ ಬಡ್ತಿ ದಿನಾಂಕ
   nextIncrementDate?: string; // ಮುಂದಿನ ವೇತನ ಬಡ್ತಿ ದಿನಾಂಕ
   incrementMonth?: 'January' | 'July' | string; // ವಾರ್ಷಿಕ ವೇತನ ಬಡ್ತಿ ತಿಂಗಳು (ಜನವರಿ / ಜುಲೈ)
-  earnedLeaveBalance?: number; // ಗಳಿಕೆ ರಜೆ ಶಿಲ್ಕು
+  earnedLeaveBalance?: number; // ಗಳಿಕೆ ರಜೆ ಶಿಲ್ಕು (EL)
+  halfPayLeaveBalance?: number; // ಅರ್ಧ ವೇತನ ರಜೆ ಶಿಲ್ಕು (HPL)
+  casualLeaveBalance?: number; // ಸಾಂದರ್ಭಿಕ ರಜೆ ಶಿಲ್ಕು (CL)
   childCareLeaveQuota?: number; // ಶಿಶುಪಾಲನ ರಜೆ ಒಟ್ಟು ಕೋಟಾ (Default 180 days for female employees, editable)
   childCareLeaveAvailed?: number; // ಶಿಶುಪಾಲನ ರಜೆ ತೆಗೆದುಕೊಂಡ ದಿನಗಳು
+  isDdo?: boolean; // ಕಚೇರಿಯ ಡಿಡಿಓ (ಆಹರಣ ಮತ್ತು ವಿತರಣಾ ಅಧಿಕಾರಿ) ಹೌದೇ?
+  bankAccountNo?: string; // ಬ್ಯಾಂಕ್ ಖಾತೆ ಸಂಖ್ಯೆ
+  bankIfsc?: string; // ಬ್ಯಾಂಕ್ IFSC ಕೋಡ್
+  panNumber?: string; // ಪ್ಯಾನ್ ಕಾರ್ಡ್ ಸಂಖ್ಯೆ
+  aadhaarNumber?: string; // ಆಧಾರ್ ಸಂಖ್ಯೆ
+  casteCategory?: string; // ಜಾತಿ / ಪ್ರವರ್ಗ (GM, SC, ST, Cat-1, 2A, 2B, 3A, 3B)
+  satsId?: string; // ಸ್ಯಾಟ್ಸ್ (SATS) ಶಿಕ್ಷಕರ ಐಡಿ
+  serviceBookVolume?: string; // ಸೇವಾ ಪುಸ್ತಕ ಸಂಪುಟ ಸಂಖ್ಯೆ
+  emergencyContact?: string; // ತುರ್ತು ಸಂಪರ್ಕ ವಿವರ
   gender?: string;
   dob?: string;
   age?: number;
@@ -293,6 +310,7 @@ export interface Employee {
   otherServiceDetails?: string; // ಇತರೆ ಅಗತ್ಯ ಸೇವಾ ವಿವರಗಳು
   serviceHistory?: ServiceSanctionRecord[];
   salaryHistory?: SalaryHistoryRecord[];
+  additionalFields?: Array<{ id: string; key: string; value: string }>; // ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ ವಿವರಗಳು
   lastUpdated: string;
 }
 
@@ -450,6 +468,15 @@ export interface OfficeConfig {
   departmentKannada?: string;
   contactEmail?: string;
   contactPhone?: string;
+  ddoCode?: string; // ಡಿಡಿಓ ಕೋಡ್ (ಉದಾ: 14041ED001)
+  ddoOfficerName?: string; // ಡಿಡಿಓ ಅಧಿಕಾರಿಗಳ ಹೆಸರು
+  ddoDesignation?: string; // ಡಿಡಿಓ ಪದನಾಮ
+  ddoKgidNumber?: string; // ಡಿಡಿಓ ಕೆ.ಜಿ.ಐ.ಡಿ ಸಂಖ್ಯೆ
+  ddoHrmsCode?: string; // ಡಿಡಿಓ HRMS ನೌಕರರ ಕೋಡ್
+  ddoEmployeeId?: string; // ಲಿಂಕ್ ಆದ ನೌಕರರ ಗುರುತು (Employee ID)
+  ddoMobile?: string;
+  ddoEmail?: string;
+  ddoOfficeName?: string;
 }
 
 export interface OcrExtractedData {
@@ -706,9 +733,10 @@ export interface PensionCalculationResult {
   netQualifyingYears: number;
   netQualifyingMonths: number;
   netQualifyingDays: number;
-  qualifyingHalfYears: number; // completed 6-monthly periods (cap: 60)
+  qualifyingHalfYears: number; // completed 6-monthly periods (cap: 60 for pension, 66 for DCRG)
   isEligibleForFullPension: boolean; // 60 half-years (30 years)
   isEligibleForRegularPension: boolean; // >= 20 half-years (10 years)
+  retirementAgeYears: number; // 60 or 65 years
 
   // Emoluments
   lastBasicPay: number;
@@ -716,7 +744,7 @@ export interface PensionCalculationResult {
   daAmount: number;
   averageEmoluments: number;
 
-  // Monthly Pension
+  // Monthly Pension (೧. ಮಾಸಿಕ ಪಿಂಚಣಿ)
   fullPension: number; // 50% of Basic Pay
   basicServicePension: number; // proportionate to qualifying service
   commutedPortion: number; // Portion commuted (up to 40% or 33.33%)
@@ -725,12 +753,12 @@ export interface PensionCalculationResult {
   medicalAllowance: number; // Fixed ₹500
   totalMonthlyReceivable: number; // reducedMonthlyPension + DR + medical
 
-  // Lump sum Benefits
+  // Lump sum Benefits - Commutation (೩. ಪಿಂಚಣಿ ಪರಿವರ್ತನೆ)
   commutationFactor: number;
   commutationLumpSum: number; // commutedPortion * 12 * factor
   commutationRestorationYears: number; // 15 years
 
-  // DCRG (Death-cum-Retirement Gratuity)
+  // DCRG (೨. ನಿವೃತ್ತಿ ಉಪದಾನ - Death-cum-Retirement Gratuity)
   dcrgRaw: number;
   dcrgSanctioned: number; // Capped at ₹20,00,000 & 16.5 months
 
@@ -738,11 +766,14 @@ export interface PensionCalculationResult {
   familyPensionNormal: number; // 30% of Basic Pay (min ₹13,500)
   familyPensionEnhanced: number; // 50% of Basic Pay (for 7 yrs or till 67 age)
 
-  // Leave Encashment
+  // Leave Encashment (೪. ಗಳಿಕೆ ರಜೆ ನಗದೀಕರಣ)
   earnedLeaveDays: number;
   leaveEncashmentAmount: number; // (Basic + DA) / 30 * days (max 300)
+  halfPayLeaveDays?: number;
+  halfPayEncashmentAmount?: number;
+  totalLeaveEncashmentSanctioned: number;
 
-  // Grand Total Terminal Lump Sum
+  // Grand Total Terminal Lump Sum (ಒಟ್ಟು ಅಂತಿಮ ನಿವೃತ್ತಿ ಸೌಲಭ್ಯಗಳು = Gratuity + Commutation + EL)
   totalTerminalLumpSum: number; // DCRG + Commutation + Leave Encashment
 }
 
@@ -781,6 +812,7 @@ export interface PensionCaseRecord {
   dob: string;
   doa: string; // Date of Appointment
   dor: string; // Date of Retirement
+  retirementAgeYears?: 60 | 65; // 60 for state govt/school, 65 for UGC/special cadres
   retirementType: PensionRetirementType;
 
   // Pay & Service
@@ -789,12 +821,13 @@ export interface PensionCaseRecord {
   daPercentage: number;
   averageEmoluments?: number;
   earnedLeaveDays: number; // EL balance (max 300)
+  halfPayLeaveDays?: number; // HPL balance
   nonQualifyingDays: number; // EOL, Dies-non etc.
 
   // Commutation
   commutationOpted: boolean;
   commutationPercentage: number; // e.g. 40 or 33.33
-  ageNextBirthday: number; // e.g. 61
+  ageNextBirthday: number; // e.g. 61 for age 60, 66 for age 65
 
   // Nominee & Bank Details
   nomineeName: string;
@@ -818,11 +851,86 @@ export interface PensionCaseRecord {
 }
 
 export type PensionLetterFormatType = 
+  | 'pension_calc_sheet' // ಪಿಂಚಣಿ ಲೆಕ್ಕಾಚಾರ ತಃಖ್ಯೆ (೪ ಪ್ರತ್ಯೇಕ ಲೆಕ್ಕಾಚಾರ ಪಟ್ಟಿ - Calculation Statement)
   | 'form7' // ಪ್ರಪತ್ರ-೭ (ಪಿಂಚಣಿ ಮತ್ತು ಉಪದಾನದ ಮಂಜೂರಾತಿ ಪ್ರಸ್ತಾವನೆ - Form 7)
   | 'form1_2' // ನಮೂನೆ-೧ & ೨ (ಪಿಂಚಣಿ ಅರ್ಜಿ ಮತ್ತು ಕುಟುಂಬ ವಿವರ / ನಾಮನಿರ್ದೇಶನ)
   | 'form6' // ನಮೂನೆ-೬ (ಸೇವಾ ಪರಿಶೀಲನೆ ಮತ್ತು ಬಾಕಿ ರಹಿತ ಪ್ರಮಾಣಪತ್ರ)
-  | 'sanction_order' // ಪಿಂಚಣಿ ಮಂಜೂರಾತಿ ಜ್ಞಾಪನಾ ಆದೇಶ (BEO Sanction Memorandum)
-  | 'provisional_order' // ತಾತ್ಕಾಲಿಕ ಪಿಂಚಣಿ ಮತ್ತು ಉಪದಾನ ಮಂಜೂರಾತಿ ಆದೇಶ (KCSR 341)
+  | 'sanction_order' // ಪಿಂಚಣಿ ಮಂಜೂರಾತಿ ಜ್ಞಾಪನಾ ಆದೇಶ (Pension Sanction Order)
+  | 'gratuity_order' // ನಿವೃತ್ತಿ ಉಪದಾನ ಮಂಜೂರಾತಿ ಆದೇಶ (DCRG Sanction Order)
   | 'commutation_order' // ಪಿಂಚಣಿ ಪರಿವರ್ತನೆ ಮಂಜೂರಾತಿ ಆದೇಶ (Commutation Sanction Order)
+  | 'el_encashment_order' // ಗಳಿಕೆ ರಜೆ ನಗದೀಕರಣ ಮಂಜೂರಾತಿ ಆದೇಶ (EL Encashment Sanction Order)
+  | 'service_verification_cert' // ಸೇವಾ ಪರಿಶೀಲನಾ ಪ್ರಮಾಣಪತ್ರ (Service Verification Certificate)
+  | 'provisional_order' // ತಾತ್ಕಾಲಿಕ ಪಿಂಚಣಿ ಮತ್ತು ಉಪದಾನ ಮಂಜೂರಾತಿ ಆದೇಶ (KCSR 341)
   | 'ag_forwarding' // ಮಹಾಲೆಕ್ಕಪಾಲರಿಗೆ (AG Karnataka) ಪ್ರಸ್ತಾವನಾ ರವಾನೆ ಪತ್ರ
   | 'no_dues_cert'; // ಬಾಕಿ ರಹಿತ ಪ್ರಮಾಣಪತ್ರ (No Dues & Vigilance Clearance Certificate)
+
+// ==================== RTI (RIGHT TO INFORMATION ACT) TYPES ====================
+export type RtiStatus = 
+  | 'ಸ್ವೀಕೃತ (Pending)' 
+  | 'ಪರಿಶೀಲನೆಯಲ್ಲಿದೆ (In Process)' 
+  | 'ಮಾಹಿತಿ ಒದಗಿಸಲಾಗಿದೆ (Information Furnished)' 
+  | 'ಕಲಂ ೬(೩) ರನ್ವಯ ವರ್ಗಾಯಿಸಲಾಗಿದೆ (Transferred Sec 6(3))' 
+  | 'ಹೆಚ್ಚುವರಿ ಶುಲ್ಕ ಬೇಡಿಕೆ (Fee Demanded)' 
+  | 'ತಿರಸ್ಕರಿಸಲಾಗಿದೆ (Rejected Sec 8/9)' 
+  | 'ಪ್ರಥಮ ಮೇಲ್ಮನವಿ ವಿಚಾರಣೆ (First Appeal Hearing)' 
+  | 'ವಿಲೇವಾರಿ & ದಾಖಲಿಸಲಾಗಿದೆ (Closed & Disposed)';
+
+export type RtiFeePaymentMode = 
+  | 'ಕೋರ್ಟ್ ಫೀ ಸ್ಟಾಂಪ್ (Court Fee Stamp ₹10)' 
+  | 'ಐ.ಪಿ.ಓ (Indian Postal Order - IPO)' 
+  | 'ಡಿ.ಡಿ (Demand Draft)' 
+  | 'ಖಜಾನೆ ಚಲನ್ (Treasury Challan)' 
+  | 'ನಗದು ಪಾವತಿ (Cash Receipt)' 
+  | 'ಬಿ.ಪಿ.ಎಲ್ ವಿನಾಯಿತಿ (BPL Exemption - ಉಚಿತ)';
+
+export type RtiSectionClause = 
+  | 'ಕಲಂ ೬(೧) - ಸಾಮಾನ್ಯ ಅರ್ಜಿ (30 Days)' 
+  | 'ಕಲಂ ೬(೩) - ಇತರೆ ಪ್ರಾಧಿಕಾರಕ್ಕೆ ವರ್ಗಾವಣೆ (5 Days)' 
+  | 'ಕಲಂ ೭(೧) - ಜೀವ ಅಥವಾ ಸ್ವಾತಂತ್ರ್ಯ (48 Hours)' 
+  | 'ಕಲಂ ೧೯(೧) - ಪ್ರಥಮ ಮೇಲ್ಮನವಿ (First Appeal)';
+
+export interface RtiCaseRecord {
+  id: string;
+  applicationNumber: string; // e.g. RTI/BEO/BHD/2026/01
+  fileNumber: string; // e.g. ಆ2/ಮಾಹಿತಿ ಹಕ್ಕು/ಕಡತ-04/2026-27
+  applicantName: string;
+  applicantAddress: string;
+  applicantPhone?: string;
+  applicantEmail?: string;
+  isBpl: boolean;
+  bplCardNumber?: string;
+  feeMode: RtiFeePaymentMode;
+  feeReceiptNumber?: string;
+  feeAmount: number;
+  receivedDate: string; // YYYY-MM-DD
+  targetResponseDate: string; // 30-day deadline
+  sectionClause: RtiSectionClause;
+  subject: string;
+  informationSought: string;
+  assignedOfficer: string; // PIO designation
+  firstAppellateAuthority: string; // BEO
+  status: RtiStatus;
+  disposalDate?: string;
+  disposalSummary?: string;
+  furtherFeeAmount?: number;
+  furtherFeePages?: number;
+  transfereeAuthorityName?: string;
+  transferDate?: string;
+  rejectionClause?: string;
+  appealNumber?: string;
+  appealHearingDate?: string;
+  appealDecision?: string;
+  notes?: { id: string; author: string; date: string; text: string }[];
+  attachments?: DocumentAttachment[];
+  createdAt: string;
+  lastUpdated: string;
+}
+
+export type RtiLetterFormatType = 
+  | 'info_furnish_letter' // ಮಾಹಿತಿ ಒದಗಿಸುವ ಅಧಿಕೃತ ಪತ್ರ
+  | 'sec6_3_transfer' // ಕಲಂ ೬(೩) ರನ್ವಯ ವರ್ಗಾವಣೆ ಪತ್ರ
+  | 'further_fee_demand' // ಕಲಂ ೭(೩) ರನ್ವಯ ಹೆಚ್ಚುವರಿ ಶುಲ್ಕ ಬೇಡಿಕೆ ಪತ್ರ
+  | 'first_appeal_notice' // ಕಲಂ ೧೯(೧) ರನ್ವಯ ಪ್ರಥಮ ಮೇಲ್ಮನವಿ ವಿಚಾರಣಾ ನೋಟಿಸ್
+  | 'sec8_rejection' // ಕಲಂ ೮/೯ ರನ್ವಯ ಮಾಹಿತಿ ತಿರಸ್ಕಾರ ಆದೇಶ
+  | 'quarterly_proforma'; // ಮಾಹಿತಿ ಹಕ್ಕು ತ್ರೈಮಾಸಿಕ/ವಾರ್ಷಿಕ ರಿಜಿಸ್ಟರ್ ತಃಖ್ಯೆ
+

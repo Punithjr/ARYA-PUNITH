@@ -88,15 +88,75 @@ export const EmployeeRosterView: React.FC<EmployeeRosterViewProps> = ({
   const [selectedStatus, setSelectedStatus] = useState<EmployeeStatus | 'all'>('all');
   const [selectedRole, setSelectedRole] = useState<string>('all');
   const [selectedEmployeeForDossier, setSelectedEmployeeForDossier] = useState<Employee | null>(null);
+  const [rosterViewTab, setRosterViewTab] = useState<'all' | 'office' | 'additional'>('all');
 
   // Multi-selection for batch deletion
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
   const [isClearingAll, setIsClearingAll] = useState(false);
 
+  // Office staff and additional info counts
+  const officeEmployeesCount = useMemo(() => {
+    return employees.filter(e => 
+      e.isDdo ||
+      e.role === 'Director / HOD' || 
+      e.role === 'Superintendent' || 
+      e.role === 'Clerk / Assistant' ||
+      e.designation.includes('ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿ') ||
+      e.designation.includes('ಅಧೀಕ್ಷಕ') ||
+      e.designation.includes('FDA') ||
+      e.designation.includes('SDA') ||
+      e.designation.includes('ಪ್ರಥಮ ದರ್ಜೆ') ||
+      e.designation.includes('ದ್ವಿತೀಯ ದರ್ಜೆ') ||
+      e.designation.includes('BEO') ||
+      e.designation.includes('ಆಡಳಿತ') ||
+      (e.officeLocation && e.officeLocation.includes('ಕಛೇರಿ'))
+    ).length;
+  }, [employees]);
+
+  const additionalInfoEmployeesCount = useMemo(() => {
+    return employees.filter(e => 
+      (e.additionalFields && e.additionalFields.length > 0) ||
+      e.emergencyContact ||
+      e.bankAccountNo ||
+      e.panNumber ||
+      e.aadhaarNumber ||
+      e.satsId ||
+      e.serviceBookVolume
+    ).length;
+  }, [employees]);
+
   // Filtered employees
   const filteredEmployees = useMemo(() => {
     return employees.filter((emp) => {
+      // Sub-tab scoping
+      if (rosterViewTab === 'office') {
+        const isOffice = emp.isDdo ||
+          emp.role === 'Director / HOD' || 
+          emp.role === 'Superintendent' || 
+          emp.role === 'Clerk / Assistant' ||
+          emp.designation.includes('ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿ') ||
+          emp.designation.includes('ಅಧೀಕ್ಷಕ') ||
+          emp.designation.includes('FDA') ||
+          emp.designation.includes('SDA') ||
+          emp.designation.includes('ಪ್ರಥಮ ದರ್ಜೆ') ||
+          emp.designation.includes('ದ್ವಿತೀಯ ದರ್ಜೆ') ||
+          emp.designation.includes('BEO') ||
+          emp.designation.includes('ಆಡಳಿತ') ||
+          (emp.officeLocation && emp.officeLocation.includes('ಕಛೇರಿ'));
+        if (!isOffice) return false;
+      }
+
+      if (rosterViewTab === 'additional') {
+        const hasExtra = (emp.additionalFields && emp.additionalFields.length > 0) ||
+          emp.emergencyContact ||
+          emp.bankAccountNo ||
+          emp.panNumber ||
+          emp.aadhaarNumber ||
+          emp.satsId ||
+          emp.serviceBookVolume;
+        if (!hasExtra) return false;
+      }
       // Search
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase().trim();
@@ -577,6 +637,53 @@ export const EmployeeRosterView: React.FC<EmployeeRosterViewProps> = ({
           </div>
         </div>
 
+        {/* SUB-TABS: ೧. ಎಲ್ಲಾ ನೌಕರರು | ೨. ಕಛೇರಿ ಸಿಬ್ಬಂದಿ ವಿವರಗಳು | ೩. ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ ವಿವರಗಳು */}
+        <div className="flex border-b-2 border-[#2b2b2b] bg-amber-50/60 px-4 pt-2.5 gap-2 overflow-x-auto">
+          <button
+            id="subtab-all-employees"
+            onClick={() => setRosterViewTab('all')}
+            className={`px-4 py-2 text-xs font-bold rounded-t-lg border-2 border-b-0 border-[#2b2b2b] flex items-center gap-1.5 transition-all cursor-pointer font-kannada ${
+              rosterViewTab === 'all'
+                ? 'bg-white text-[#2b2b2b] shadow-[0_-2px_0px_#f59e0b]'
+                : 'bg-stone-100/90 text-stone-600 hover:bg-white'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 text-[#f59e0b]" />
+            <span>೧. ಎಲ್ಲಾ ನೌಕರರು ({employees.length})</span>
+          </button>
+
+          <button
+            id="subtab-office-staff"
+            onClick={() => setRosterViewTab('office')}
+            className={`px-4 py-2 text-xs font-bold rounded-t-lg border-2 border-b-0 border-[#2b2b2b] flex items-center gap-1.5 transition-all cursor-pointer font-kannada ${
+              rosterViewTab === 'office'
+                ? 'bg-white text-[#2b2b2b] shadow-[0_-2px_0px_#0284c7]'
+                : 'bg-stone-100/90 text-stone-600 hover:bg-white'
+            }`}
+          >
+            <Building2 className="w-3.5 h-3.5 text-sky-700" />
+            <span>೨. ಕಛೇರಿ ಸಿಬ್ಬಂದಿ ವಿವರಗಳು ({officeEmployeesCount})</span>
+          </button>
+
+          <button
+            id="subtab-additional-fields"
+            onClick={() => setRosterViewTab('additional')}
+            className={`px-4 py-2 text-xs font-bold rounded-t-lg border-2 border-b-0 border-[#2b2b2b] flex items-center gap-1.5 transition-all cursor-pointer font-kannada ${
+              rosterViewTab === 'additional'
+                ? 'bg-amber-100 text-amber-950 shadow-[0_-2px_0px_#f59e0b]'
+                : 'bg-stone-100/90 text-stone-600 hover:bg-amber-50'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-700" />
+            <span>೩. ನೌಕರರ ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ ವಿವರಗಳು ({additionalInfoEmployeesCount})</span>
+            {additionalInfoEmployeesCount > 0 && (
+              <span className="bg-amber-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold">
+                {additionalInfoEmployeesCount}
+              </span>
+            )}
+          </button>
+        </div>
+
         {/* Filter & Search Toolbar */}
         <div className="p-4 border-b-2 border-[#2b2b2b] bg-white grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Search */}
@@ -704,6 +811,155 @@ export const EmployeeRosterView: React.FC<EmployeeRosterViewProps> = ({
               </div>
             )}
 
+            {/* DEDICATED SEPARATE SECTION FOR ADDITIONAL INFORMATION (ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ ಸೇರಿಸಿದನ್ನು ಬೇರಿಕಡೆ ಬರುವಂತೆ ಇರಬೇಕು) */}
+            {rosterViewTab === 'additional' && (
+              <div className="p-4 sm:p-6 bg-amber-50/40 border-b-2 border-[#2b2b2b] space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-2 border-amber-300 pb-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="p-1.5 rounded-lg bg-[#2b2b2b] text-[#f59e0b]">
+                        <Sparkles className="w-4 h-4 text-[#f59e0b]" />
+                      </span>
+                      <h3 className="font-gaegu text-2xl font-bold text-amber-950">
+                        ನೌಕರರ ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ ವಿವರಗಳ ಪ್ರತ್ಯೇಕ ಪಟ್ಟಿ (Additional & Custom Information)
+                      </h3>
+                    </div>
+                    <p className="text-xs text-stone-600 mt-1 font-kannada">
+                      ನೌಕರರ ಮಾಹಿತಿಯಲ್ಲಿ ನಮೂದಿಸಲಾದ ಎಲ್ಲಾ ಹೆಚ್ಚುವರಿ ವಿವರಗಳು (ನಾಮಿನಿ, ಪಿ.ಎಫ್., ರಕ್ತದ ಗುಂಪು, ತುರ್ತು ಸಂಪರ್ಕ, ಬ್ಯಾಂಕ್ ವಿವರ ಇತ್ಯಾದಿ) ಇಲ್ಲಿ ಪ್ರತ್ಯೇಕವಾಗಿ ಲಭ್ಯವಿವೆ.
+                    </p>
+                  </div>
+                  <button
+                    onClick={onAddEmployee}
+                    className="px-3 py-1.5 bg-[#2b2b2b] text-white hover:bg-stone-800 text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer font-kannada shadow-xs self-start sm:self-auto"
+                  >
+                    <UserPlus className="w-3.5 h-3.5 text-[#f59e0b]" />
+                    <span>+ ಹೊಸ ನೌಕರ & ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ ಸೇರಿಸಿ</span>
+                  </button>
+                </div>
+
+                {filteredEmployees.length === 0 ? (
+                  <div className="py-12 text-center bg-white rounded-xl border-2 border-dashed border-amber-300 p-6 space-y-2">
+                    <Sparkles className="w-8 h-8 text-amber-500 mx-auto" />
+                    <p className="font-bold text-sm text-stone-800 font-kannada">ಇನ್ನೂ ಯಾವುದೇ ನೌಕರರಿಗೆ ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ ಸೇರಿಸಲಾಗಿಲ್ಲ</p>
+                    <p className="text-xs text-stone-500 font-kannada">
+                      ನೌಕರರ ಪಟ್ಟಿಯಲ್ಲಿ &ldquo;Edit&rdquo; ಕ್ಲಿಕ್ ಮಾಡಿ ಕೆಳಭಾಗದಲ್ಲಿರುವ &ldquo;+ ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ ಸೇರಿಸಿ&rdquo; ಮೂಲಕ ಕಸ್ಟಮ್ ವಿವರಗಳನ್ನು ನಮೂದಿಸಿ.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredEmployees.map((emp) => (
+                      <div key={emp.id} className="bg-white rounded-xl border-2 border-[#2b2b2b] p-4 shadow-[3px_3px_0px_#f59e0b] space-y-3 flex flex-col justify-between">
+                        <div className="space-y-2">
+                          <div className="flex items-start justify-between gap-2 border-b border-stone-200 pb-2">
+                            <div>
+                              <h4 className="font-bold text-sm text-[#2b2b2b]">{emp.fullName}</h4>
+                              <p className="text-[11px] text-stone-600">{emp.designation}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="font-mono text-[10px] bg-stone-100 px-1.5 py-0.5 rounded border border-stone-300">
+                                  {emp.employeeCode}
+                                </span>
+                                {emp.kgidNumber && (
+                                  <span className="font-mono text-[10px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.5 rounded border border-amber-300">
+                                    KGID: {emp.kgidNumber}
+                                  </span>
+                                )}
+                                {emp.isDdo && (
+                                  <span className="text-[9px] bg-amber-400 text-stone-950 font-black px-1.5 py-0.5 rounded border border-[#2b2b2b]">
+                                    ⭐ DDO
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => onEditEmployee(emp)}
+                              className="p-1.5 text-amber-800 hover:bg-amber-100 rounded-lg border border-amber-300 transition-colors text-xs font-bold flex items-center gap-1 cursor-pointer shrink-0"
+                              title="ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ ತಿದ್ದುಪಡಿ ಮಾಡಿ"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span className="text-[11px]">ತಿದ್ದುಪಡಿ</span>
+                            </button>
+                          </div>
+
+                          {/* Built-in Extra Information Fields */}
+                          <div className="grid grid-cols-2 gap-2 text-[11px]">
+                            {emp.satsId && (
+                              <div className="bg-stone-50 p-1.5 rounded border border-stone-200">
+                                <span className="text-[10px] text-stone-500 block">SATS ID:</span>
+                                <span className="font-mono font-bold text-stone-800">{emp.satsId}</span>
+                              </div>
+                            )}
+                            {emp.serviceBookVolume && (
+                              <div className="bg-stone-50 p-1.5 rounded border border-stone-200">
+                                <span className="text-[10px] text-stone-500 block">ಸೇವಾ ಪುಸ್ತಕ ಸಂಪುಟ:</span>
+                                <span className="font-bold text-stone-800">{emp.serviceBookVolume}</span>
+                              </div>
+                            )}
+                            {emp.emergencyContact && (
+                              <div className="bg-stone-50 p-1.5 rounded border border-stone-200">
+                                <span className="text-[10px] text-stone-500 block">ತುರ್ತು ಸಂಪರ್ಕ:</span>
+                                <span className="font-mono font-bold text-stone-800">{emp.emergencyContact}</span>
+                              </div>
+                            )}
+                            {emp.bankAccountNo && (
+                              <div className="bg-stone-50 p-1.5 rounded border border-stone-200">
+                                <span className="text-[10px] text-stone-500 block">ಬ್ಯಾಂಕ್ ಖಾತೆ:</span>
+                                <span className="font-mono font-bold text-stone-800">{emp.bankAccountNo}</span>
+                              </div>
+                            )}
+                            {emp.bankIfsc && (
+                              <div className="bg-stone-50 p-1.5 rounded border border-stone-200">
+                                <span className="text-[10px] text-stone-500 block">IFSC ಕೋಡ್:</span>
+                                <span className="font-mono font-bold text-stone-800">{emp.bankIfsc}</span>
+                              </div>
+                            )}
+                            {emp.panNumber && (
+                              <div className="bg-stone-50 p-1.5 rounded border border-stone-200">
+                                <span className="text-[10px] text-stone-500 block">PAN ಸಂಖ್ಯೆ:</span>
+                                <span className="font-mono font-bold text-stone-800">{emp.panNumber}</span>
+                              </div>
+                            )}
+                            {emp.aadhaarNumber && (
+                              <div className="bg-stone-50 p-1.5 rounded border border-stone-200">
+                                <span className="text-[10px] text-stone-500 block">ಆಧಾರ್ ಸಂಖ್ಯೆ:</span>
+                                <span className="font-mono font-bold text-stone-800">{emp.aadhaarNumber}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Dynamic Custom Key-Value Fields */}
+                          {emp.additionalFields && emp.additionalFields.length > 0 && (
+                            <div className="pt-2 border-t border-amber-200 space-y-1.5">
+                              <span className="text-[10px] font-bold text-amber-900 font-kannada block">
+                                ಕಸ್ಟಮ್ ಹೆಚ್ಚುವರಿ ವಿವರಗಳು ({emp.additionalFields.length}):
+                              </span>
+                              <div className="space-y-1">
+                                {emp.additionalFields.map(f => (
+                                  <div key={f.id} className="flex items-center justify-between text-xs bg-amber-50/80 px-2 py-1 rounded border border-amber-200">
+                                    <span className="font-semibold text-stone-700">{f.key}:</span>
+                                    <span className="font-bold text-amber-950 font-mono">{f.value}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-500">
+                          <span>ರಜೆ ಶಿಲ್ಕು: EL: {emp.earnedLeaveBalance ?? 30} | HPL: {emp.halfPayLeaveBalance ?? 20}</span>
+                          <button
+                            onClick={() => onEditEmployee(emp)}
+                            className="text-amber-800 font-bold hover:underline cursor-pointer"
+                          >
+                            + ಇನ್ನಷ್ಟು ಸೇರಿಸಿ &rarr;
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead className="bg-stone-100/90 text-stone-700 font-semibold border-b border-stone-200">
@@ -721,6 +977,7 @@ export const EmployeeRosterView: React.FC<EmployeeRosterViewProps> = ({
                     <th className="py-3 px-4">Emp Code & KGID</th>
                     <th className="py-3 px-4">Wing & Office Location</th>
                     <th className="py-3 px-4">ಮೂಲ ವೇತನ (Basic Pay)</th>
+                    <th className="py-3 px-4">ರಜೆ ಶಿಲ್ಕು (EL & HPL)</th>
                     <th className="py-3 px-4">Contact</th>
                     <th className="py-3 px-4">Status</th>
                     <th className="py-3 px-4 text-right">Actions</th>
@@ -764,11 +1021,21 @@ export const EmployeeRosterView: React.FC<EmployeeRosterViewProps> = ({
                             {initials || 'ED'}
                           </div>
                           <div>
-                            <div className="font-bold text-stone-900 flex items-center gap-1.5">
+                            <div className="font-bold text-stone-900 flex items-center gap-1.5 flex-wrap">
                               <span>{emp.fullName}</span>
                               <span className="text-[10px] font-normal text-stone-500">
                                 ({emp.employmentType})
                               </span>
+                              {emp.isDdo && (
+                                <span className="px-1.5 py-0.5 bg-amber-400 text-stone-950 font-black text-[9px] rounded border border-[#2b2b2b] inline-flex items-center gap-0.5 shadow-2xs font-kannada">
+                                  ⭐ DDO
+                                </span>
+                              )}
+                              {emp.additionalFields && emp.additionalFields.length > 0 && (
+                                <span className="px-1.5 py-0.5 bg-purple-100 text-purple-900 border border-purple-300 text-[9px] rounded font-bold font-kannada">
+                                  +{emp.additionalFields.length} ಹೆಚ್ಚುವರಿ ವಿವರ
+                                </span>
+                              )}
                             </div>
                             <div className="text-stone-600 text-[11px] flex items-center gap-1">
                               <span>{emp.designation}</span>
@@ -823,6 +1090,21 @@ export const EmployeeRosterView: React.FC<EmployeeRosterViewProps> = ({
                               <span>{emp.serviceHistory.length} orders recorded</span>
                             </div>
                           )}
+                        </div>
+                      </td>
+
+                      {/* Leave Balances: EL & HPL (ಗಳಿಕೆ ರಜೆ ಮತ್ತು ಎಚ್ ಪಿ ಎಲ್) */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <div className="space-y-1">
+                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-300 text-[11px] font-bold">
+                            <span className="font-kannada">ಗಳಿಕೆ (EL):</span>
+                            <span className="font-mono">{emp.earnedLeaveBalance ?? 30} ದಿನ</span>
+                          </div>
+                          <br />
+                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-300 text-[11px] font-bold">
+                            <span className="font-kannada">HPL:</span>
+                            <span className="font-mono">{emp.halfPayLeaveBalance ?? 20} ದಿನ</span>
+                          </div>
                         </div>
                       </td>
 

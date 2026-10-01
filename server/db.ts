@@ -205,6 +205,15 @@ export interface DbOfficeConfig {
   pincode: string;
   email: string;
   phone: string;
+  ddoCode?: string; // ಡಿಡಿಓ ಕೋಡ್
+  ddoOfficerName?: string; // ಡಿಡಿಓ ಹೆಸರು
+  ddoDesignation?: string; // ಡಿಡಿಓ ಪದನಾಮ
+  ddoKgidNumber?: string; // ಡಿಡಿಓ ಕೆಜಿಐಡಿ
+  ddoHrmsCode?: string; // ಡಿಡಿಓ HRMS ಕೋಡ್
+  ddoEmployeeId?: string; // ನೌಕರರ ಐಡಿ
+  ddoMobile?: string;
+  ddoEmail?: string;
+  ddoOfficeName?: string;
 }
 
 export interface DbSchoolInstitution {
@@ -409,12 +418,20 @@ const DEFAULT_OFFICE: DbOfficeConfig = {
   departmentName: 'ಶಾಲಾ ಶಿಕ್ಷಣ ಮತ್ತು ಸಾಕ್ಷರತಾ ಇಲಾಖೆ',
   officeName: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
   officeAddress: 'ಬಿ.ಹೆಚ್. ರಸ್ತೆ, ಹಳೇನಗರ, ಭದ್ರಾವತಿ, ಶಿವಮೊಗ್ಗ ಜಿಲ್ಲೆ - 577301',
-  officerName: 'ಬಿ.ಕೆ. ನಾರಾಯಣಪ್ಪ',
-  officerDesignation: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು',
+  officerName: 'ಹೆಚ್. ರವಿಕುಮಾರ್',
+  officerDesignation: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಆಹರಣ ಮತ್ತು ವಿತರಣಾ ಅಧಿಕಾರಿ (DDO)',
   district: 'ಶಿವಮೊಗ್ಗ',
   pincode: '577301',
   email: 'beobhadravathi@karnataka.gov.in',
   phone: '08282-268241',
+  ddoCode: '14041ED001',
+  ddoOfficerName: 'ಹೆಚ್. ರವಿಕುಮಾರ್',
+  ddoDesignation: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಆಹರಣ ಮತ್ತು ವಿತರಣಾ ಅಧಿಕಾರಿ (DDO)',
+  ddoKgidNumber: '108294',
+  ddoHrmsCode: 'BHD-BEO-001',
+  ddoMobile: '+91 94480 12345',
+  ddoEmail: 'beo.bhadravathi@karnataka.gov.in',
+  ddoOfficeName: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
 };
 
 const DEFAULT_ORDER_TYPES: DbOrderType[] = [
@@ -1133,7 +1150,7 @@ export const DEFAULT_EMPLOYEES: DbEmployee[] = [
     kgidNumber: '108294',
     fullName: 'ಹೆಚ್. ರವಿಕುಮಾರ್ (H. Ravikumar)',
     parentName: 'ಹನುಮಂತರಾಯಪ್ಪ',
-    designation: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು (BEO)',
+    designation: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು (BEO) & ಡಿಡಿಓ',
     cadreGroup: 'ಗ್ರೂಪ್-ಎ',
     section: 'Administration & Services',
     officeLocation: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ',
@@ -1146,8 +1163,9 @@ export const DEFAULT_EMPLOYEES: DbEmployee[] = [
     earnedLeaveBalance: 280,
     childCareLeaveQuota: 0,
     childCareLeaveAvailed: 0,
-    ddoCode: '291501',
-    placeOfWork: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ',
+    isDdo: true,
+    ddoCode: '14041ED001',
+    placeOfWork: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು',
     hometown: 'ದಾವಣಗೆರೆ',
     gender: 'Male',
     dob: '1976-06-10',
@@ -1161,7 +1179,7 @@ export const DEFAULT_EMPLOYEES: DbEmployee[] = [
     notes: 'Drawing & Disbursing Officer (DDO)',
     createdAt: '2024-01-01',
     lastUpdated: '2026-09-17',
-  }
+  },
 ];
 
 const DEFAULT_SALARY_HISTORY: DbSalaryHistory[] = [];
@@ -2010,7 +2028,7 @@ class RelationalDatabase {
       }
     }
 
-    const office = this.data.offices[0] || DEFAULT_OFFICE;
+    const office = this.getOfficeConfig();
     const today = new Date().toISOString().split('T')[0];
     const orderDate = orderData.orderDate || today;
 
@@ -2074,6 +2092,14 @@ class RelationalDatabase {
       `ಕಛೇರಿ ಕಡತ / ಆದೇಶ ಪುಸ್ತಕ / ಎಚ್‌ಆರ್‌ಎಂಎಸ್ ತಂತ್ರಾಂಶ ದಾಖಲಾತಿಗಾಗಿ.`
     ];
 
+    // DDO Signatory Resolution:
+    // Dynamically pull DDO officer information from employee where isDdo === true
+    const ddoEmp = this.data.employees.find(e => (e as any).isDdo === true);
+    const office = this.getOfficeConfig();
+    const resolvedSignatoryName = ddoEmp?.fullName || (orderData as any).signatoryName || office.ddoOfficerName || office.officerName || 'ಹೆಚ್. ರವಿಕುಮಾರ್';
+    const resolvedSignatoryDesignation = ddoEmp?.designation || (orderData as any).signatoryDesignation || office.ddoDesignation || office.officerDesignation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ';
+    const resolvedSignatoryOffice = ddoEmp?.placeOfWork || ddoEmp?.officeLocation || (orderData as any).signatoryOffice || office.ddoOfficeName || office.officeName || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು';
+
     // Build the Memorandum Order Record
     const orderRecord: DbMemorandumOrder = {
       id: `ord-${Date.now()}`,
@@ -2105,8 +2131,8 @@ class RelationalDatabase {
         balanceBefore: calc.leaveCalculation?.currentBalance,
         balanceAfter: calc.leaveCalculation?.balanceAfter,
       } : undefined,
-      signatoryName: office.officerName,
-      signatoryDesignation: office.officerDesignation,
+      signatoryName: resolvedSignatoryName,
+      signatoryDesignation: resolvedSignatoryDesignation,
       copiesForwardedTo: copiesList,
       status: 'Approved',
       createdBy: user.displayName,
@@ -2227,9 +2253,9 @@ class RelationalDatabase {
         <div class="mt-5 flex justify-end">
           <div class="text-center min-w-52 space-y-1">
             <p class="text-xs text-stone-700">ಸಹಿ/-</p>
-            <p class="font-bold text-sm text-stone-950">(ಬಿ.ಕೆ. ನಾರಾಯಣಪ್ಪ)</p>
-            <p class="text-xs font-bold text-stone-900">ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು</p>
-            <p class="text-[11px] text-stone-800">ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು</p>
+            <p class="font-bold text-sm text-stone-950">(${resolvedSignatoryName})</p>
+            <p class="text-xs font-bold text-stone-900">${resolvedSignatoryDesignation}</p>
+            <p class="text-[11px] text-stone-800">${resolvedSignatoryOffice}</p>
           </div>
         </div>
 
@@ -2420,7 +2446,23 @@ class RelationalDatabase {
 
   // 8. OFFICE CONFIG
   public getOfficeConfig(): DbOfficeConfig {
-    return this.data.offices[0] || DEFAULT_OFFICE;
+    const office = this.data.offices[0] || DEFAULT_OFFICE;
+    const ddoEmp = this.data.employees.find(e => (e as any).isDdo === true);
+    if (ddoEmp) {
+      return {
+        ...office,
+        ddoOfficerName: ddoEmp.fullName,
+        ddoDesignation: ddoEmp.designation,
+        ddoCode: ddoEmp.ddoCode || office.ddoCode || '14041ED001',
+        ddoKgidNumber: ddoEmp.kgidNumber || office.ddoKgidNumber,
+        ddoMobile: ddoEmp.phone || office.ddoMobile,
+        ddoEmail: ddoEmp.email || office.ddoEmail,
+        ddoOfficeName: ddoEmp.placeOfWork || ddoEmp.officeLocation || office.ddoOfficeName || office.officeName,
+        officerName: ddoEmp.fullName,
+        officerDesignation: ddoEmp.designation,
+      };
+    }
+    return office;
   }
 
   public updateOfficeConfig(updates: Partial<DbOfficeConfig>, performedBy: string, role: string): DbOfficeConfig {

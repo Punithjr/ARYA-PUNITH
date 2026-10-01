@@ -11,7 +11,9 @@ import {
   FileText, 
   Check, 
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { Employee, DepartmentSection, EmploymentType, EmployeeStatus, EmployeeRole } from '../types';
 
@@ -87,6 +89,25 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
   const [gender, setGender] = useState<'Female' | 'Male' | 'Other'>('Female');
   const [childCareLeaveQuota, setChildCareLeaveQuota] = useState<number>(180);
 
+  // Leave Balances & DDO Designation
+  const [earnedLeaveBalance, setEarnedLeaveBalance] = useState<number>(30); // ಗಳಿಕೆ ರಜೆ (EL)
+  const [halfPayLeaveBalance, setHalfPayLeaveBalance] = useState<number>(20); // ಅರ್ಧ ವೇತನ ರಜೆ (HPL)
+  const [casualLeaveBalance, setCasualLeaveBalance] = useState<number>(15); // ಸಾಂದರ್ಭಿಕ ರಜೆ (CL)
+  const [isDdo, setIsDdo] = useState<boolean>(false); // ಕಛೇರಿಯ ಡಿಡಿಓ ಅಧಿಕಾರಿ
+
+  // Additional Information (ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ)
+  const [bankAccountNo, setBankAccountNo] = useState('');
+  const [bankIfsc, setBankIfsc] = useState('');
+  const [panNumber, setPanNumber] = useState('');
+  const [aadhaarNumber, setAadhaarNumber] = useState('');
+  const [casteCategory, setCasteCategory] = useState('ಸಾಮಾನ್ಯ (GM)');
+  const [satsId, setSatsId] = useState('');
+  const [serviceBookVolume, setServiceBookVolume] = useState('ಸಂಪುಟ-೧');
+  const [emergencyContact, setEmergencyContact] = useState('');
+
+  // Dynamic Custom Additional Fields (ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ)
+  const [customFields, setCustomFields] = useState<Array<{ id: string; key: string; value: string }>>([]);
+
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -113,6 +134,29 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
       setPlaceOfWork(initialEmployee.placeOfWork || initialEmployee.officeLocation || '');
       setGender((initialEmployee.gender as any) || 'Female');
       setChildCareLeaveQuota(initialEmployee.childCareLeaveQuota !== undefined ? initialEmployee.childCareLeaveQuota : 180);
+
+      // Leave Balances & DDO
+      setEarnedLeaveBalance(initialEmployee.earnedLeaveBalance !== undefined ? initialEmployee.earnedLeaveBalance : 30);
+      setHalfPayLeaveBalance(initialEmployee.halfPayLeaveBalance !== undefined ? initialEmployee.halfPayLeaveBalance : 20);
+      setCasualLeaveBalance(initialEmployee.casualLeaveBalance !== undefined ? initialEmployee.casualLeaveBalance : 15);
+      setIsDdo(Boolean(initialEmployee.isDdo || initialEmployee.designation?.toLowerCase().includes('ddo') || initialEmployee.designation?.includes('ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿ')));
+
+      // Additional info
+      setBankAccountNo(initialEmployee.bankAccountNo || '');
+      setBankIfsc(initialEmployee.bankIfsc || '');
+      setPanNumber(initialEmployee.panNumber || '');
+      setAadhaarNumber(initialEmployee.aadhaarNumber || '');
+      setCasteCategory(initialEmployee.casteCategory || 'ಸಾಮಾನ್ಯ (GM)');
+      setSatsId(initialEmployee.satsId || '');
+      setServiceBookVolume(initialEmployee.serviceBookVolume || 'ಸಂಪುಟ-೧');
+      setEmergencyContact(initialEmployee.emergencyContact || '');
+
+      // Additional custom fields
+      if (initialEmployee.additionalFields && Array.isArray(initialEmployee.additionalFields)) {
+        setCustomFields(initialEmployee.additionalFields);
+      } else {
+        setCustomFields([]);
+      }
     } else {
       // New employee default
       const randomCode = `EDN-EMP-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -137,9 +181,36 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
       setPlaceOfWork('');
       setGender('Female');
       setChildCareLeaveQuota(180);
+
+      setEarnedLeaveBalance(30);
+      setHalfPayLeaveBalance(20);
+      setCasualLeaveBalance(15);
+      setIsDdo(false);
+
+      setBankAccountNo('');
+      setBankIfsc('');
+      setPanNumber('');
+      setAadhaarNumber('');
+      setCasteCategory('ಸಾಮಾನ್ಯ (GM)');
+      setSatsId('');
+      setServiceBookVolume('ಸಂಪುಟ-೧');
+      setEmergencyContact('');
+      setCustomFields([]);
     }
     setError(null);
   }, [initialEmployee, isOpen]);
+
+  const handleAddCustomField = (defaultKey: string = '') => {
+    setCustomFields(prev => [...prev, { id: 'field_' + Date.now() + Math.floor(Math.random() * 1000), key: defaultKey, value: '' }]);
+  };
+
+  const handleUpdateCustomField = (id: string, field: 'key' | 'value', text: string) => {
+    setCustomFields(prev => prev.map(item => item.id === id ? { ...item, [field]: text } : item));
+  };
+
+  const handleRemoveCustomField = (id: string) => {
+    setCustomFields(prev => prev.filter(item => item.id !== id));
+  };
 
   if (!isOpen) return null;
 
@@ -185,6 +256,19 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
           placeOfWork: placeOfWork.trim() || officeLocation.trim(),
           gender,
           childCareLeaveQuota: Number(childCareLeaveQuota) || 180,
+          earnedLeaveBalance: Number(earnedLeaveBalance) || 0,
+          halfPayLeaveBalance: Number(halfPayLeaveBalance) || 0,
+          casualLeaveBalance: Number(casualLeaveBalance) || 0,
+          isDdo,
+          bankAccountNo: bankAccountNo.trim(),
+          bankIfsc: bankIfsc.trim(),
+          panNumber: panNumber.trim(),
+          aadhaarNumber: aadhaarNumber.trim(),
+          casteCategory: casteCategory.trim(),
+          satsId: satsId.trim(),
+          serviceBookVolume: serviceBookVolume.trim(),
+          emergencyContact: emergencyContact.trim(),
+          additionalFields: customFields.filter(f => f.key.trim() && f.value.trim()),
         },
         isEdit
       );
@@ -489,11 +573,299 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
                   placeholder="180"
                   className="w-full px-2.5 py-1.5 text-xs bg-white rounded-lg border border-pink-300 focus:outline-none focus:ring-2 focus:ring-pink-500/40 font-mono font-bold text-pink-900"
                 />
-                <p className="text-[10px] text-stone-500 mt-1">
-                  ಎಲ್ಲಾ ಮಹಿಳಾ ನೌಕರರಿಗೆ ಒಟ್ಟು 180 ದಿನಗಳ ರಜೆ ಇರುತ್ತದೆ. ಅಗತ್ಯವಿದ್ದಲ್ಲಿ ಬದಲಾಯಿಸಬಹುದು.
-                </p>
               </div>
             </div>
+
+            {/* LEAVE BALANCES (ಗಳಿಕೆ ರಜೆ EL & ಅರ್ಧ ವೇತನ ರಜೆ HPL ಶಿಲ್ಕು) */}
+            <div className="pt-3 border-t border-amber-200/80">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-stone-900 font-kannada flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-emerald-700" />
+                  ನೌಕರರ ರಜೆಗಳ ಶಿಲ್ಕು (Leave Balances):
+                </span>
+                <span className="text-[10px] bg-emerald-100 text-emerald-900 font-bold px-2 py-0.5 rounded border border-emerald-300">
+                  KCSR Rule 118A
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-white p-2.5 rounded-lg border border-amber-300">
+                  <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                    ಗಳಿಕೆ ರಜೆ ಶಿಲ್ಕು (EL - Days) *
+                  </label>
+                  <input
+                    id="input-emp-el-balance"
+                    type="number"
+                    min={0}
+                    max={300}
+                    value={earnedLeaveBalance}
+                    onChange={(e) => setEarnedLeaveBalance(Number(e.target.value))}
+                    placeholder="30"
+                    className="w-full px-2.5 py-1.5 text-xs bg-amber-50/50 rounded border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono font-bold text-stone-900"
+                  />
+                  <span className="text-[10px] text-stone-500">ಗರಿಷ್ಠ 300 ದಿನಗಳು</span>
+                </div>
+
+                <div className="bg-white p-2.5 rounded-lg border border-amber-300">
+                  <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                    ಅರ್ಧ ವೇತನ ರಜೆ (HPL - Days) *
+                  </label>
+                  <input
+                    id="input-emp-hpl-balance"
+                    type="number"
+                    min={0}
+                    max={400}
+                    value={halfPayLeaveBalance}
+                    onChange={(e) => setHalfPayLeaveBalance(Number(e.target.value))}
+                    placeholder="20"
+                    className="w-full px-2.5 py-1.5 text-xs bg-amber-50/50 rounded border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono font-bold text-stone-900"
+                  />
+                  <span className="text-[10px] text-stone-500">ವಾರ್ಷಿಕ 20 ದಿನಗಳು</span>
+                </div>
+
+                <div className="bg-white p-2.5 rounded-lg border border-amber-300">
+                  <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                    ಸಾಂದರ್ಭಿಕ ರಜೆ (CL - Days)
+                  </label>
+                  <input
+                    id="input-emp-cl-balance"
+                    type="number"
+                    min={0}
+                    max={15}
+                    value={casualLeaveBalance}
+                    onChange={(e) => setCasualLeaveBalance(Number(e.target.value))}
+                    placeholder="15"
+                    className="w-full px-2.5 py-1.5 text-xs bg-amber-50/50 rounded border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono font-bold text-stone-900"
+                  />
+                  <span className="text-[10px] text-stone-500">ವಾರ್ಷಿಕ 15 ದಿನಗಳು</span>
+                </div>
+              </div>
+            </div>
+
+            {/* DDO (ಆಹರಣ ಮತ್ತು ವಿತರಣಾ ಅಧಿಕಾರಿ) CHECKBOX */}
+            <div className="pt-2 border-t border-amber-200/80">
+              <label className="flex items-center gap-2.5 p-2 rounded-lg bg-sky-50 border border-sky-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isDdo}
+                  onChange={(e) => setIsDdo(e.target.checked)}
+                  className="w-4 h-4 text-sky-600 rounded focus:ring-sky-500 cursor-pointer"
+                />
+                <div>
+                  <span className="text-xs font-bold text-sky-950 font-kannada">
+                    ಈ ನೌಕರರು ಕಛೇರಿಯ ಆಹರಣ ಮತ್ತು ವಿತರಣಾ ಅಧಿಕಾರಿಯಾಗಿದ್ದಾರೆ (DDO / BEO)
+                  </span>
+                  <p className="text-[10px] text-sky-800">
+                    ಇದನ್ನು ಗುರುತು ಮಾಡಿದರೆ ಇವರ ವಿವರಗಳು ಸೆಟ್ಟಿಂಗ್ಸ್‌ನ ಡಿಡಿಓ ವಿಭಾಗಕ್ಕೆ ಸ್ವಯಂಚಾಲಿತವಾಗಿ ನವೀಕರಣಗೊಳ್ಳುತ್ತವೆ.
+                  </p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* ADDITIONAL INFORMATION (ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ - ಬ್ಯಾಂಕ್, ಪ್ಯಾನ್, ಆಧಾರ್, ಜಾತಿ, ಸ್ಯಾಟ್ಸ್) */}
+          <div className="p-4 bg-stone-50 rounded-xl border border-stone-300 space-y-3">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-2">
+              <span className="text-xs font-bold text-stone-900 font-kannada flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-amber-600" />
+                ನೌಕರರ ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ (Additional Official Information):
+              </span>
+              <span className="text-[10px] text-stone-500">ಆಡಳಿತ & ವೇತನಕ್ಕೆ ಅಗತ್ಯ</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                  ಬ್ಯಾಂಕ್ ಖಾತೆ ಸಂಖ್ಯೆ (Account No.)
+                </label>
+                <input
+                  type="text"
+                  value={bankAccountNo}
+                  onChange={(e) => setBankAccountNo(e.target.value)}
+                  placeholder="ಉದಾ: 64019284712"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white rounded border border-stone-300 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                  ಬ್ಯಾಂಕ್ IFSC ಕೋಡ್
+                </label>
+                <input
+                  type="text"
+                  value={bankIfsc}
+                  onChange={(e) => setBankIfsc(e.target.value.toUpperCase())}
+                  placeholder="SBIN0040129"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white rounded border border-stone-300 font-mono uppercase"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                  ಪ್ಯಾನ್ ಕಾರ್ಡ್ (PAN Number)
+                </label>
+                <input
+                  type="text"
+                  value={panNumber}
+                  onChange={(e) => setPanNumber(e.target.value.toUpperCase())}
+                  placeholder="ABCDE1234F"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white rounded border border-stone-300 font-mono uppercase"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                  ಆಧಾರ್ ಸಂಖ್ಯೆ (Aadhaar Number)
+                </label>
+                <input
+                  type="text"
+                  maxLength={12}
+                  value={aadhaarNumber}
+                  onChange={(e) => setAadhaarNumber(e.target.value)}
+                  placeholder="12 ಅಂಕಿಗಳ ಸಂಖ್ಯೆ"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white rounded border border-stone-300 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                  ಜಾತಿ / ಪ್ರವರ್ಗ (Category)
+                </label>
+                <select
+                  value={casteCategory}
+                  onChange={(e) => setCasteCategory(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs bg-white rounded border border-stone-300"
+                >
+                  <option value="ಸಾಮಾನ್ಯ (GM)">ಸಾಮಾನ್ಯ (GM)</option>
+                  <option value="ಪ್ರವರ್ಗ-೧ (Cat-1)">ಪ್ರವರ್ಗ-೧ (Cat-1)</option>
+                  <option value="೨ಎ (2A)">೨ಎ (2A)</option>
+                  <option value="೨ಬಿ (2B)">೨ಬಿ (2B)</option>
+                  <option value="೩ಎ (3A)">೩ಎ (3A)</option>
+                  <option value="೩ಬಿ (3B)">೩ಬಿ (3B)</option>
+                  <option value="ಪರಿಶಿಷ್ಟ ಜಾತಿ (SC)">ಪರಿಶಿಷ್ಟ ಜಾತಿ (SC)</option>
+                  <option value="ಪರಿಶಿಷ್ಟ ಪಂಗಡ (ST)">ಪರಿಶಿಷ್ಟ ಪಂಗಡ (ST)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                  ಸ್ಯಾಟ್ಸ್ ಐಡಿ (SATS Teacher ID)
+                </label>
+                <input
+                  type="text"
+                  value={satsId}
+                  onChange={(e) => setSatsId(e.target.value)}
+                  placeholder="ಉದಾ: TCH-291501"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white rounded border border-stone-300 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                  ಸೇವಾ ಪುಸ್ತಕ ಸಂಪುಟ ಸಂಖ್ಯೆ
+                </label>
+                <input
+                  type="text"
+                  value={serviceBookVolume}
+                  onChange={(e) => setServiceBookVolume(e.target.value)}
+                  placeholder="ಸಂಪುಟ-೧"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white rounded border border-stone-300"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                  ತುರ್ತು ಸಂಪರ್ಕ ಸಂಖ್ಯೆ (Emergency Phone)
+                </label>
+                <input
+                  type="tel"
+                  value={emergencyContact}
+                  onChange={(e) => setEmergencyContact(e.target.value)}
+                  placeholder="ಮೊಬೈಲ್ ಸಂಖ್ಯೆ"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white rounded border border-stone-300"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* DYNAMIC ADDITIONAL CUSTOM FIELDS (ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ ಸೇರಿಸಲು ಅವಕಾಶ) */}
+          <div className="p-4 bg-amber-50/70 rounded-xl border-2 border-amber-300 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-300 pb-2">
+              <div>
+                <span className="text-xs font-bold text-amber-950 font-kannada flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-amber-700" />
+                  ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ ಸೇರಿಸಿ (Custom Additional Information):
+                </span>
+                <p className="text-[10px] text-amber-800">
+                  ನೌಕರರಿಗೆ ಸಂಬಂಧಿಸಿದ ಯಾವುದೇ ಹೆಚ್ಚುವರಿ ವಿವರಗಳನ್ನು (ನಾಮಿನಿ, ಪಿಂಚಣಿ ಯೋಜನೆ, ಭತ್ಯೆ, ಇತ್ಯಾದಿ) ಇಲ್ಲಿ ಸೇರಿಸಬಹುದು ಮತ್ತು ಇವು ಇತರ ಕಡತಗಳಲ್ಲಿ ಪ್ರದರ್ಶಿತವಾಗುತ್ತವೆ.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleAddCustomField('')}
+                className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer font-kannada self-start sm:self-auto"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ ವಿವರ ಸೇರಿಸಿ</span>
+              </button>
+            </div>
+
+            {/* Quick pre-set shortcut chips */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-[10px] text-stone-500 font-bold font-kannada">ತ್ವರಿತ ಶೀರ್ಷಿಕೆಗಳು:</span>
+              {[
+                'ನಾಮಿನಿ ಹೆಸರು (Nominee)',
+                'ಪಿ.ಎಫ್. / PRAN ಸಂಖ್ಯೆ',
+                'ವಿಶೇಷ ಕರ್ತವ್ಯ / ಹೊಣೆಗಾರಿಕೆ',
+                'ರಕ್ತದ ಗುಂಪು (Blood Group)',
+                'ಹಿಂದಿನ ಶಾಲೆ / ಕಚೇರಿ',
+                'ಮನೆ ವಿಳಾಸ'
+              ].map(chip => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => handleAddCustomField(chip)}
+                  className="px-2 py-0.5 rounded bg-white hover:bg-amber-100 text-stone-700 border border-amber-300 text-[10px] font-medium font-kannada cursor-pointer"
+                >
+                  + {chip}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom fields list */}
+            {customFields.length > 0 ? (
+              <div className="space-y-2 pt-2">
+                {customFields.map((field) => (
+                  <div key={field.id} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-amber-200">
+                    <input
+                      type="text"
+                      value={field.key}
+                      onChange={(e) => handleUpdateCustomField(field.id, 'key', e.target.value)}
+                      placeholder="ಮಾಹಿತಿಯ ಶೀರ್ಷಿಕೆ (ಉದಾ: ನಾಮಿನಿ ಹೆಸರು)"
+                      className="w-1/3 px-2 py-1 text-xs border border-stone-300 rounded font-semibold text-stone-900 bg-amber-50/30"
+                    />
+                    <input
+                      type="text"
+                      value={field.value}
+                      onChange={(e) => handleUpdateCustomField(field.id, 'value', e.target.value)}
+                      placeholder="ವಿವರ / ಮಾಹಿತಿ (ಉದಾ: ಶ್ರೀಮತಿ ರೇಖಾ - ಪತ್ನಿ)"
+                      className="flex-1 px-2 py-1 text-xs border border-stone-300 rounded font-medium text-stone-900"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCustomField(field.id)}
+                      className="p-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded cursor-pointer"
+                      title="ತೆಗೆದುಹಾಕಿ"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-stone-500 italic py-1 font-kannada">
+                ಇನ್ನೂ ಯಾವುದೇ ಕಸ್ಟಮ್ ಹೆಚ್ಚುವರಿ ಮಾಹಿತಿ ಸೇರಿಸಲಾಗಿಲ್ಲ. ಮೇಲೆ ನೀಡಿರುವ ಬಟನ್ ಕ್ಲಿಕ್ ಮಾಡಿ ಸೇರಿಸಬಹುದು.
+              </p>
+            )}
           </div>
 
           {/* Row 5: Email, Phone & Date of Joining */}

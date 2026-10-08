@@ -37,6 +37,40 @@ interface SchoolManagementViewProps {
   onShowToast?: (msg: string) => void;
 }
 
+export const computeSchoolCompliance = (school: SchoolInstitution) => {
+  const status = school.recognitionStatus;
+  const validUpto = school.recognitionValidUpto || '';
+
+  if (status === 'Expired' || validUpto.includes('2024') || validUpto.includes('2025')) {
+    return {
+      rating: 'red' as const,
+      labelKn: 'ಕೆಂಪು: ಅವಧಿ ಮೀರಿದೆ (Expired / Red Alert)',
+      shortKn: 'ಅವಧಿ ಮೀರಿದೆ (Expired)',
+      badgeClass: 'bg-rose-100 text-rose-900 border-rose-300',
+      dotBg: 'bg-rose-600',
+      descKn: 'ಮಾನ್ಯತೆ ಅವಧಿ ಮುಗಿದಿದೆ ಅಥವಾ ಸುರಕ್ಷತಾ ತಪಾಸಣೆ ಬಾಕಿ ಇದೆ. ತಕ್ಷಣ ಕ್ರಮ ಅಗತ್ಯ.',
+    };
+  }
+  if (status === 'Renewal Due' || validUpto.includes('2026-27') || validUpto.includes('2026')) {
+    return {
+      rating: 'yellow' as const,
+      labelKn: 'ಹಳದಿ: ನವೀಕರಣ ಬಾಕಿ (Renewal Due < 6M)',
+      shortKn: 'ನವೀಕರಣ ಬಾಕಿ (Due)',
+      badgeClass: 'bg-amber-100 text-amber-900 border-amber-300',
+      dotBg: 'bg-amber-500',
+      descKn: 'ಮಾನ್ಯತೆ ನವೀಕರಣದ ಕಾಲಮಿತಿ ಹತ್ತಿರವಿದ್ದು, ಆಡಳಿತ ಮಂಡಳಿಯಿಂದ ಪ್ರಸ್ತಾವನೆ ಸಲ್ಲಿಕೆ ಬಾಕಿ ಇದೆ.',
+    };
+  }
+  return {
+    rating: 'green' as const,
+    labelKn: 'ಹಸಿರು: ಸಂಪೂರ್ಣ ಅರ್ಹ (Fully Compliant)',
+    shortKn: 'ಸಂಪೂರ್ಣ ಅರ್ಹ (Compliant)',
+    badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+    dotBg: 'bg-emerald-500',
+    descKn: 'ಮಾನ್ಯತೆ ಪ್ರಮಾಣಪತ್ರ ಮತ್ತು ತಪಾಸಣಾ ವರದಿಗಳು ನಿಯಮಾನುಸಾರ ಚಾಲ್ತಿಯಲ್ಲಿವೆ (> 1 ವರ್ಷ ಸಿಂಧುತ್ವ).',
+  };
+};
+
 export const SchoolManagementView: React.FC<SchoolManagementViewProps> = ({
   currentUser,
   onDraftLetterForSchool,
@@ -607,46 +641,111 @@ export const SchoolManagementView: React.FC<SchoolManagementViewProps> = ({
             ಫಿಲ್ಟರ್ ತೆರವುಗೊಳಿಸಿ
           </button>
         </div>
-      ) : viewMode === 'cards' ? (
-        /* Cards View */
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {filteredSchools.map((school) => {
-            const isAided = school.grantStatus === 'Aided';
-            const isProposed = school.grantStatus === 'Proposed for Grant';
-            const isDue = school.recognitionStatus === 'Renewal Due' || school.recognitionStatus === 'Expired';
+      ) : (
+        <div className="space-y-4">
+          {/* Visual Compliance Legend Component */}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-stone-200/90 shadow-xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-100 pb-2">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <h3 className="text-xs sm:text-sm font-bold text-stone-900 font-kannada">
+                  ಶಾಲಾ ಮಾನ್ಯತೆ & ತಪಾಸಣಾ ವರದಿಗಳ ಅನುಸರಣಾ ಸೂಚ್ಯಂಕ (Compliance Rating Visual Legend)
+                </h3>
+              </div>
+              <span className="text-[11px] text-stone-500 font-medium font-kannada">
+                ಮಾನ್ಯತೆ ಪ್ರಮಾಣಪತ್ರಗಳ ನವೀಕರಣ ಮತ್ತು ತಪಾಸಣಾ ವರದಿಗಳ ಸಿಂಧುತ್ವದ ಆಧಾರಿತ ಬಣ್ಣಗಳು
+              </span>
+            </div>
 
-            return (
-              <div
-                key={school.id}
-                id={`school-card-${school.id}`}
-                className="bg-white rounded-xl border border-stone-200 shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col justify-between space-y-4"
-              >
-                {/* Top Section */}
-                <div className="space-y-2.5">
-                  {/* Status Badges */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-2.5">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
-                        isAided
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                          : isProposed
-                          ? 'bg-amber-50 text-amber-900 border-amber-200'
-                          : 'bg-stone-100 text-stone-700 border-stone-200'
-                      }`}>
-                        {school.grantStatus === 'Aided' && 'ವೇತನಾನುದಾನಿತ (Aided)'}
-                        {school.grantStatus === 'Proposed for Grant' && 'ಅನುದಾನಕ್ಕೆ ಪ್ರಸ್ತಾವಿತ'}
-                        {school.grantStatus === 'Unaided' && 'ಅನುದಾನ ರಹಿತ (Unaided)'}
-                        {school.grantStatus === 'Partially Aided' && 'ಭಾಗಶಃ ಅನುದಾನಿತ'}
-                      </span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Green */}
+              <div className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/60 space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-emerald-200 shrink-0"></span>
+                  <span className="text-xs font-bold text-emerald-950 font-kannada">
+                    ಹಸಿರು (Green): ಸಂಪೂರ್ಣ ಅರ್ಹ (Compliant)
+                  </span>
+                </div>
+                <p className="text-[11px] text-emerald-800 leading-relaxed font-kannada">
+                  ಮಾನ್ಯತೆ ಪ್ರಮಾಣಪತ್ರ ಹಾಗೂ ಕಟ್ಟಡ/ಅಗ್ನಿಶಾಮಕ ತಪಾಸಣಾ ವರದಿಗಳು ಚಾಲ್ತಿಯಲ್ಲಿವೆ (&gt; 1 ವರ್ಷ ಸಿಂಧುತ್ವ).
+                </p>
+              </div>
 
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${
-                        isDue
-                          ? 'bg-rose-50 text-rose-800 border-rose-200'
-                          : 'bg-sky-50 text-sky-800 border-sky-200'
-                      }`}>
-                        ಮಾನ್ಯತೆ: {school.recognitionValidUpto} ({school.recognitionStatus === 'Renewal Due' ? 'ನವೀಕರಣ ಬಾಕಿ' : 'ಚಾಲ್ತಿ'})
-                      </span>
-                    </div>
+              {/* Yellow */}
+              <div className="p-3 rounded-xl border border-amber-200 bg-amber-50/60 space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-3.5 h-3.5 rounded-full bg-amber-500 ring-2 ring-amber-200 shrink-0 animate-pulse"></span>
+                  <span className="text-xs font-bold text-amber-950 font-kannada">
+                    ಹಳದಿ (Yellow): ನವೀಕರಣ ಬಾಕಿ (Renewal Due)
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-900 leading-relaxed font-kannada">
+                  ಸಿಂಧುತ್ವ ಮುಕ್ತಾಯಕ್ಕೆ 6 ತಿಂಗಳಿಗಿಂತ ಕಡಿಮೆ ಸಮಯವಿದ್ದು, ನವೀಕರಣ ಪ್ರಸ್ತಾವನೆ ಹಾಗೂ ದಾಖಲೆ ಸಲ್ಲಿಕೆ ಬಾಕಿ ಇದೆ.
+                </p>
+              </div>
+
+              {/* Red */}
+              <div className="p-3 rounded-xl border border-rose-200 bg-rose-50/60 space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-3.5 h-3.5 rounded-full bg-rose-500 ring-2 ring-rose-200 shrink-0 animate-pulse"></span>
+                  <span className="text-xs font-bold text-rose-950 font-kannada">
+                    ಕೆಂಪು (Red): ಅವಧಿ ಮೀರಿದೆ (Expired / Alert)
+                  </span>
+                </div>
+                <p className="text-[11px] text-rose-900 leading-relaxed font-kannada">
+                  ಮಾನ್ಯತೆ ಅವಧಿ ಮುಗಿದಿದೆ ಅಥವಾ ಸುರಕ್ಷತಾ ತಪಾಸಣೆ ಬಾಕಿ ಇದೆ. ತಕ್ಷಣ ಕಾರಣ ಕೇಳಿ ನೊಟೀಸ್ ಅಥವಾ ಸ್ಥಳ ತಪಾಸಣೆ ಅಗತ್ಯ.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {viewMode === 'cards' ? (
+            /* Cards View */
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {filteredSchools.map((school) => {
+                const isAided = school.grantStatus === 'Aided';
+                const isProposed = school.grantStatus === 'Proposed for Grant';
+                const isDue = school.recognitionStatus === 'Renewal Due' || school.recognitionStatus === 'Expired';
+                const compliance = computeSchoolCompliance(school);
+
+                return (
+                  <div
+                    key={school.id}
+                    id={`school-card-${school.id}`}
+                    className="bg-white rounded-xl border border-stone-200 shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col justify-between space-y-4"
+                  >
+                    {/* Top Section */}
+                    <div className="space-y-2.5">
+                      {/* Status Badges */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-2.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                            isAided
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : isProposed
+                              ? 'bg-amber-50 text-amber-900 border-amber-200'
+                              : 'bg-stone-100 text-stone-700 border-stone-200'
+                          }`}>
+                            {school.grantStatus === 'Aided' && 'ವೇತನಾನುದಾನಿತ (Aided)'}
+                            {school.grantStatus === 'Proposed for Grant' && 'ಅನುದಾನಕ್ಕೆ ಪ್ರಸ್ತಾವಿತ'}
+                            {school.grantStatus === 'Unaided' && 'ಅನುದಾನ ರಹಿತ (Unaided)'}
+                            {school.grantStatus === 'Partially Aided' && 'ಭಾಗಶಃ ಅನುದಾನಿತ'}
+                          </span>
+
+                          {/* Compliance Rating Indicator Badge */}
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${compliance.badgeClass}`}>
+                            <span className={`w-2 h-2 rounded-full ${compliance.dotBg}`}></span>
+                            <span>{compliance.shortKn}</span>
+                          </span>
+
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${
+                            isDue
+                              ? 'bg-rose-50 text-rose-800 border-rose-200'
+                              : 'bg-sky-50 text-sky-800 border-sky-200'
+                          }`}>
+                            ಮಾನ್ಯತೆ: {school.recognitionValidUpto}
+                          </span>
+                        </div>
 
                     <span className="text-[11px] font-mono font-bold text-stone-500 bg-stone-50 px-2 py-0.5 rounded border border-stone-200">
                       UDISE: {school.udiseCode}
@@ -915,13 +1014,15 @@ export const SchoolManagementView: React.FC<SchoolManagementViewProps> = ({
                       </td>
                       <td className="p-3">
                         <div className="font-bold text-stone-800">{school.recognitionValidUpto}</div>
-                        <span className={`inline-block px-1.5 py-0.5 rounded text-[9.5px] font-semibold mt-0.5 ${
-                          school.recognitionStatus === 'Valid'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-rose-50 text-rose-700 border border-rose-200'
-                        }`}>
-                          {school.recognitionStatus}
-                        </span>
+                        {(() => {
+                          const comp = computeSchoolCompliance(school);
+                          return (
+                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold mt-0.5 border ${comp.badgeClass}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${comp.dotBg}`}></span>
+                              <span>{comp.shortKn}</span>
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex items-center justify-center gap-1">
@@ -965,6 +1066,8 @@ export const SchoolManagementView: React.FC<SchoolManagementViewProps> = ({
           </div>
         </div>
       )}
+    </div>
+  )}
 
       {/* 5. ADD / EDIT SCHOOL MODAL */}
       {isModalOpen && (

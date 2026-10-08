@@ -271,7 +271,7 @@ export function computePensionDetails(input: PensionInputData): PensionCalculati
 
   // Dearness Relief (DR): As per Karnataka Pension Rules, DR is paid on the FULL Basic Pension, not the reduced pension.
   const dearnessRelief = Math.round((basicServicePension * daRate) / 100);
-  const medicalAllowance = basicServicePension > 0 ? FIXED_MEDICAL_ALLOWANCE : 0;
+  const medicalAllowance = 0; // ವೈದ್ಯಕೀಯ ಮೊತ್ತ ಇರುವುದಿಲ್ಲ (No Medical Allowance as requested)
 
   // Family Pension
   // Normal: 30% of Basic Pay (subject to minimum ₹13,500)
@@ -1842,3 +1842,322 @@ export function renderPensionFormatHtml(
       return generatePensionCalculationSheetHtml(record, office);
   }
 }
+
+export interface QuickPensionEstimateInput {
+  yearsOfService: number;
+  lastBasicPay: number;
+  daPercentage?: number;
+  commutationOpted?: boolean;
+  commutationPercentage?: number;
+  earnedLeaveDays?: number;
+  halfPayLeaveDays?: number;
+  ageNextBirthday?: number;
+}
+
+export interface QuickPensionEstimateResult {
+  yearsOfService: number;
+  completedHalfYears: number;
+  gratuityHalfYears: number;
+  lastBasicPay: number;
+  daPercentage: number;
+  daAmount: number;
+  monthlyEmoluments: number;
+
+  // 1. Monthly Pension
+  fullPension: number;
+  basicServicePension: number;
+  dearnessRelief: number;
+  medicalAllowance: number;
+  isEligibleForFullPension: boolean;
+  isEligibleForRegularPension: boolean;
+
+  // 2. Commutation
+  commutationOpted: boolean;
+  commutationPercentage: number;
+  commutedPortion: number;
+  commutationFactor: number;
+  commutationLumpSum: number;
+  reducedMonthlyPension: number;
+  totalMonthlyReceivable: number;
+
+  // 3. Gratuity (DCRG)
+  dcrgRaw: number;
+  dcrgSanctioned: number;
+  isDcrgCapped: boolean;
+
+  // 4. Leave Encashment
+  earnedLeaveDays: number;
+  leaveEncashmentAmount: number;
+  halfPayLeaveDays: number;
+  halfPayEncashmentAmount: number;
+  totalLeaveEncashment: number;
+
+  // Grand Total Terminal Benefits (Lump Sum)
+  totalTerminalBenefits: number;
+
+  // Family Pension
+  familyPensionNormal: number;
+  familyPensionEnhanced: number;
+}
+
+export function calculateQuickPensionEstimate(input: QuickPensionEstimateInput): QuickPensionEstimateResult {
+  const years = Math.max(0, Number(input.yearsOfService) || 0);
+  const pay = Math.max(0, Number(input.lastBasicPay) || 0);
+  const daRate = input.daPercentage !== undefined ? Number(input.daPercentage) : DEFAULT_DA_PERCENTAGE;
+  const commOpted = input.commutationOpted !== undefined ? input.commutationOpted : true;
+  const commPct = Math.min(40, Math.max(0, input.commutationPercentage !== undefined ? Number(input.commutationPercentage) : 40));
+  const elDays = Math.min(300, Math.max(0, input.earnedLeaveDays !== undefined ? Number(input.earnedLeaveDays) : 300));
+  const hplDays = Math.max(0, input.halfPayLeaveDays !== undefined ? Number(input.halfPayLeaveDays) : 0);
+  const ageNext = input.ageNextBirthday || 61;
+
+  // Completed six-monthly periods for pension (capped at 60 for full pension = 30 yrs)
+  const completedHalfYears = Math.min(60, Math.round(years * 2));
+  // Completed six-monthly periods for gratuity (capped at 66 = 33 yrs)
+  const gratuityHalfYears = Math.min(66, Math.round(years * 2));
+
+  const daAmount = Math.round((pay * daRate) / 100);
+  const monthlyEmoluments = pay + daAmount;
+
+  // 1. Monthly Pension
+  const fullPension = Math.round(pay / 2);
+  const isEligibleForRegularPension = completedHalfYears >= 20; // 10 years minimum
+  const isEligibleForFullPension = completedHalfYears >= 60; // 30 years full
+
+  let basicServicePension = 0;
+  if (isEligibleForRegularPension) {
+    if (isEligibleForFullPension) {
+      basicServicePension = fullPension;
+    } else {
+      basicServicePension = Math.round((fullPension * completedHalfYears) / 60);
+    }
+    basicServicePension = Math.max(MIN_PENSION_KARNATAKA, Math.min(MAX_PENSION_KARNATAKA, basicServicePension));
+  }
+
+  const dearnessRelief = Math.round((basicServicePension * daRate) / 100);
+  const medicalAllowance = 0; // ವೈದ್ಯಕೀಯ ಮೊತ್ತ ಇರುವುದಿಲ್ಲ
+
+  // 2. Commutation
+  let commutedPortion = 0;
+  let commutationLumpSum = 0;
+  const commutationFactor = KCSR_COMMUTATION_FACTORS[ageNext] || DEFAULT_COMMUTATION_FACTOR;
+
+  if (commOpted && basicServicePension > 0) {
+    commutedPortion = Math.round((basicServicePension * commPct) / 100);
+    commutationLumpSum = Math.round(commutedPortion * 12 * commutationFactor);
+  }
+
+  const reducedMonthlyPension = Math.max(0, basicServicePension - commutedPortion);
+  const totalMonthlyReceivable = reducedMonthlyPension + dearnessRelief + medicalAllowance;
+
+  // 3. Retirement Gratuity (DCRG)
+  const dcrgRaw = Math.round((monthlyEmoluments / 4) * gratuityHalfYears);
+  const max16HalfTimes = Math.round(monthlyEmoluments * 16.5);
+  const dcrgSanctioned = Math.min(dcrgRaw, max16HalfTimes, MAX_DCRG_CEILING);
+  const isDcrgCapped = dcrgRaw > MAX_DCRG_CEILING || dcrgRaw > max16HalfTimes;
+
+  // 4. Leave Encashment
+  const dailyRate = monthlyEmoluments / 30;
+  const leaveEncashmentAmount = Math.round(dailyRate * elDays);
+  const eligibleHplDays = Math.min(hplDays, Math.max(0, 300 - elDays));
+  const halfPayEncashmentAmount = eligibleHplDays > 0 ? Math.round(dailyRate * (eligibleHplDays / 2)) : 0;
+  const totalLeaveEncashment = leaveEncashmentAmount + halfPayEncashmentAmount;
+
+  // Grand Total Terminal Benefits (Lump Sum)
+  const totalTerminalBenefits = dcrgSanctioned + commutationLumpSum + totalLeaveEncashment;
+
+  // Family Pension
+  const familyPensionNormal = Math.max(MIN_PENSION_KARNATAKA, Math.round(pay * 0.30));
+  const familyPensionEnhanced = Math.round(pay * 0.50);
+
+  return {
+    yearsOfService: years,
+    completedHalfYears,
+    gratuityHalfYears,
+    lastBasicPay: pay,
+    daPercentage: daRate,
+    daAmount,
+    monthlyEmoluments,
+    fullPension,
+    basicServicePension,
+    dearnessRelief,
+    medicalAllowance,
+    isEligibleForFullPension,
+    isEligibleForRegularPension,
+    commutationOpted: commOpted,
+    commutationPercentage: commPct,
+    commutedPortion,
+    commutationFactor,
+    commutationLumpSum,
+    reducedMonthlyPension,
+    totalMonthlyReceivable,
+    dcrgRaw,
+    dcrgSanctioned,
+    isDcrgCapped,
+    earnedLeaveDays: elDays,
+    leaveEncashmentAmount,
+    halfPayLeaveDays: hplDays,
+    halfPayEncashmentAmount,
+    totalLeaveEncashment,
+    totalTerminalBenefits,
+    familyPensionNormal,
+    familyPensionEnhanced
+  };
+}
+
+export function generatePensionEstimateSlipHtml(
+  est: QuickPensionEstimateResult,
+  empInfo?: { name?: string; designation?: string; employeeCode?: string; kgidNumber?: string },
+  office: OfficeConfig = DEFAULT_PENSION_OFFICE_CONFIG
+): string {
+  const currentDate = new Date().toLocaleDateString('kn-IN', { year: 'numeric', month: 'long', day: 'numeric' });
+  const totalWords = numberToKannadaWords(est.totalTerminalBenefits);
+
+  return `
+  <div class="p-8 max-w-4xl mx-auto bg-white font-sans text-stone-900 print:p-2">
+    <div class="border-b-2 border-stone-800 pb-4 text-center">
+      <div class="text-xs font-bold uppercase tracking-wider text-amber-900">${office.departmentName}</div>
+      <h1 class="text-xl font-black font-kannada mt-1">${office.officeName}</h1>
+      <div class="text-xs text-stone-600 mt-0.5">${office.officeAddress} • Email: ${office.email || office.contactEmail || ''}</div>
+      <div class="mt-3 inline-block bg-stone-900 text-amber-300 px-4 py-1 rounded text-xs font-bold font-kannada tracking-wide">
+        ನಿವೃತ್ತಿ ಸೌಲಭ್ಯಗಳ ಅಂದಾಜು ಲೆಕ್ಕಾಚಾರ ಪಟ್ಟಿ (PENSION & TERMINAL BENEFITS ESTIMATE)
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4 my-4 p-3 bg-stone-50 border border-stone-300 rounded text-xs">
+      <div>
+        <span class="text-stone-500 block">ನೌಕರರ ಹೆಸರು (Employee Name):</span>
+        <strong class="text-sm font-bold text-stone-900">${empInfo?.name || 'ನೌಕರರ ವಿವರ (Employee)'}</strong>
+        <div class="text-stone-600 mt-0.5">${empInfo?.designation || 'ಸರ್ಕಾರಿ ನೌಕರರು'} ${empInfo?.kgidNumber ? `• KGID: ${empInfo.kgidNumber}` : ''}</div>
+      </div>
+      <div class="text-right">
+        <span class="text-stone-500 block">ದಿನಾಂಕ (Date of Estimate):</span>
+        <strong class="font-mono-code font-bold">${currentDate}</strong>
+        <div class="text-[11px] text-stone-500 mt-1">೭ನೇ ವೇತನ ಆಯೋಗ & KCSR ನಿಯಮಾವಳಿಗಳು</div>
+      </div>
+    </div>
+
+    <!-- PRIMARY INPUT METRICS -->
+    <div class="grid grid-cols-4 gap-2 text-center my-3 text-xs">
+      <div class="p-2.5 bg-amber-50 rounded border border-amber-300">
+        <span class="text-[10px] text-amber-900 font-bold block">ಅರ್ಹತಾ ಸೇವೆ (Service)</span>
+        <span class="text-base font-black font-mono-code text-amber-950">${est.yearsOfService} ವರ್ಷ</span>
+        <span class="text-[10px] text-stone-500 block">${est.completedHalfYears} ಅರ್ಧವಾರ್ಷಿಕಗಳು</span>
+      </div>
+      <div class="p-2.5 bg-emerald-50 rounded border border-emerald-300">
+        <span class="text-[10px] text-emerald-900 font-bold block">ಕೊನೆಯ ಮೂಲ ವೇತನ (Basic)</span>
+        <span class="text-base font-black font-mono-code text-emerald-950">${formatINR(est.lastBasicPay)}</span>
+        <span class="text-[10px] text-stone-500 block">DA: ${est.daPercentage}% (${formatINR(est.daAmount)})</span>
+      </div>
+      <div class="p-2.5 bg-sky-50 rounded border border-sky-300">
+        <span class="text-[10px] text-sky-900 font-bold block">ತಿಂಗಳ ನಿವ್ವಳ ಪಿಂಚಣಿ</span>
+        <span class="text-base font-black font-mono-code text-sky-950">${formatINR(est.totalMonthlyReceivable)}</span>
+        <span class="text-[10px] text-stone-500 block">ಮೂಲ: ${formatINR(est.basicServicePension)}</span>
+      </div>
+      <div class="p-2.5 bg-stone-900 text-amber-300 rounded border border-stone-800">
+        <span class="text-[10px] uppercase font-bold block text-stone-400">ಒಟ್ಟು ನಿವೃತ್ತಿ ಇಡಿಗಂಟು</span>
+        <span class="text-base font-black font-mono-code text-amber-400">${formatINR(est.totalTerminalBenefits)}</span>
+        <span class="text-[10px] text-stone-400 block">Lump Sum Total</span>
+      </div>
+    </div>
+
+    <!-- DETAILED FOUR BREAKDOWNS -->
+    <table class="w-full text-xs border border-stone-300 border-collapse my-4">
+      <thead>
+        <tr class="bg-stone-100 font-bold text-stone-800">
+          <th class="p-2 border border-stone-300 text-left w-12">ಕ್ರ.ಸಂ</th>
+          <th class="p-2 border border-stone-300 text-left">ನಿವೃತ್ತಿ ಸೌಲಭ್ಯದ ವಿವರ (Retirement Benefit Head)</th>
+          <th class="p-2 border border-stone-300 text-left">ಲೆಕ್ಕಾಚಾರದ ಸೂತ್ರ / ಆಧಾರ (Formula / Basis)</th>
+          <th class="p-2 border border-stone-300 text-right w-36">ಅಂದಾಜು ಮೊತ್ತ (Amount ₹)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="p-2 border border-stone-300 text-center font-bold">೧</td>
+          <td class="p-2 border border-stone-300 font-bold">
+            ನಿವೃತ್ತಿ ಉಪದಾನ (Death-cum-Retirement Gratuity - DCRG)
+          </td>
+          <td class="p-2 border border-stone-300 text-stone-600">
+            (ಮೂಲ ವೇತನ + DA) ÷ ೪ × ${est.gratuityHalfYears} ಅರ್ಧವಾರ್ಷಿಕ ಅವಧಿಗಳು (ಗರಿಷ್ಠ ಮಿತಿ ₹೨೦,೦೦,೦೦೦/-)
+          </td>
+          <td class="p-2 border border-stone-300 text-right font-mono-code font-bold text-stone-950">
+            ${formatINR(est.dcrgSanctioned)}
+          </td>
+        </tr>
+        <tr>
+          <td class="p-2 border border-stone-300 text-center font-bold">೨</td>
+          <td class="p-2 border border-stone-300 font-bold">
+            ಪಿಂಚಣಿ ಪರಿವರ್ತನೆ ಗಂಟುಮೊತ್ತ (Commuted Value of Pension - CVP)
+          </td>
+          <td class="p-2 border border-stone-300 text-stone-600">
+            ${est.commutationPercentage}% ರಂತೆ ಪರಿವರ್ತನೆ: ${formatINR(est.commutedPortion)} × ೧೨ × ${est.commutationFactor} (೬೧ನೇ ವಯಸ್ಸಿನ ಮೌಲ್ಯ)
+          </td>
+          <td class="p-2 border border-stone-300 text-right font-mono-code font-bold text-stone-950">
+            ${formatINR(est.commutationLumpSum)}
+          </td>
+        </tr>
+        <tr>
+          <td class="p-2 border border-stone-300 text-center font-bold">೩</td>
+          <td class="p-2 border border-stone-300 font-bold">
+            ಗಳಿಕೆ ರಜೆ ನಗದೀಕರಣ (Earned Leave Encashment)
+          </td>
+          <td class="p-2 border border-stone-300 text-stone-600">
+            ${est.earnedLeaveDays} ದಿನಗಳ ಗಳಿಕೆ ರಜೆ (ವೇತನ + DA ÷ ೩೦ ದಿನ)
+          </td>
+          <td class="p-2 border border-stone-300 text-right font-mono-code font-bold text-stone-950">
+            ${formatINR(est.totalLeaveEncashment)}
+          </td>
+        </tr>
+        <tr class="bg-amber-100 font-bold text-amber-950 border-t-2 border-stone-800">
+          <td class="p-2.5 border border-stone-300 text-center" colspan="3">
+            ಒಟ್ಟು ಅಂತಿಮ ನಿವೃತ್ತಿ ಗಂಟುಮೊತ್ತ (GRAND TOTAL TERMINAL BENEFITS):
+          </td>
+          <td class="p-2.5 border border-stone-300 text-right font-mono-code text-sm font-black">
+            ${formatINR(est.totalTerminalBenefits)}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="p-3 bg-stone-50 border border-stone-300 rounded text-xs space-y-1">
+      <div class="text-[11px] text-stone-600">ಅಕ್ಷರಗಳಲ್ಲಿ ಮೊತ್ತ (In Words):</div>
+      <div class="font-bold text-stone-900 font-kannada text-sm">${totalWords} ಮಾತ್ರ.</div>
+    </div>
+
+    <div class="mt-4 p-3 bg-stone-100 rounded border border-stone-300 text-xs">
+      <div class="font-bold text-stone-800 mb-1">ಮುಂದುವರಿಯುವ ಮಾಸಿಕ ಪಿಂಚಣಿ ವಿವರಗಳು (Ongoing Monthly Pension):</div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-[11px]">
+        <div class="p-1.5 bg-white rounded border">
+          <span class="text-stone-500 block">ಮೂಲ ಪಿಂಚಣಿ</span>
+          <strong>${formatINR(est.basicServicePension)}</strong>
+        </div>
+        <div class="p-1.5 bg-white rounded border">
+          <span class="text-stone-500 block">ಪರಿವರ್ತಿತ ಕಡಿತ (40%)</span>
+          <strong class="text-rose-700">-${formatINR(est.commutedPortion)}</strong>
+        </div>
+        <div class="p-1.5 bg-white rounded border">
+          <span class="text-stone-500 block">ತುಟ್ಟಿ ಭತ್ಯೆ (DA)</span>
+          <strong class="text-emerald-700">+${formatINR(est.dearnessRelief)}</strong>
+        </div>
+        <div class="p-1.5 bg-white rounded border">
+          <span class="text-stone-500 block">ವೈದ್ಯಕೀಯ ಭತ್ಯೆ</span>
+          <strong>+${formatINR(est.medicalAllowance)}</strong>
+        </div>
+      </div>
+      <div class="mt-2 text-right font-bold text-stone-900">
+        ಪ್ರತಿ ತಿಂಗಳು ಕೈಗೆ ಸಿಗುವ ನಿವ್ವಳ ಮೊತ್ತ: <span class="font-mono-code text-emerald-800 text-sm">${formatINR(est.totalMonthlyReceivable)}</span>/ತಿಂಗಳಿಗೆ
+      </div>
+    </div>
+
+    <div class="mt-8 pt-4 border-t border-stone-300 flex justify-between items-end text-xs">
+      <div class="text-[10px] text-stone-500">
+        ಗಮನಿಸಿ: ಈ ಲೆಕ್ಕಾಚಾರವು ಕರ್ನಾಟಕ ಸರ್ಕಾರಿ ನೌಕರರ ೭ನೇ ವೇತನ ಆಯೋಗದ ನಿಯಮಾನುಸಾರ ಅಂದಾಜು ವಿವರವಾಗಿದೆ.
+      </div>
+      <div class="text-right">
+        <div class="font-bold text-stone-800">${office.officerDesignation}</div>
+        <div class="text-[11px] text-stone-600">${office.officeName}</div>
+      </div>
+    </div>
+  </div>
+  `;
+}
+

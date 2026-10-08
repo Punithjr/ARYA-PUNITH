@@ -111,6 +111,10 @@ export interface FileMovementRecord {
   sentDate: string;
   remarks: string;
   statusAfterMove: string;
+  initiatingOfficer?: string;
+  transferTimestamp?: string;
+  fromSection?: string;
+  toSection?: string;
 }
 
 export interface RtiDocketDetails {
@@ -150,7 +154,7 @@ export interface MasterDocketFile {
   section: DepartmentSection;
   fileCategory?: DocketFileCategory | string;
   initiatedDate: string;
-  status: 'Active / Open' | 'Under Scrutiny' | 'Pending Higher Approval' | 'Disposed / Closed';
+  status: 'Active / Open' | 'Under Scrutiny' | 'Pending Higher Approval' | 'Disposed / Closed' | 'Withdrawn' | 'In-Transit' | 'Under Review' | string;
   currentCustodian: string;
   priority: LetterPriority;
   sectionCode?: string; // e.g. ಆ1
@@ -158,11 +162,15 @@ export interface MasterDocketFile {
   lettersCount?: number;
   linkedLetterIds: string[];
   movementHistory: FileMovementRecord[];
+  movementTrail?: FileMovementRecord[];
   notes?: string;
   isRtiFile?: boolean;
   rtiDetails?: RtiDocketDetails;
   attachments?: DocumentAttachment[];
   createdBy?: string; // ಕಡತ ಸೃಜಿಸಿದ ಬಳಕೆದಾರರು (Admin / User-1 to 5)
+  dueDate?: string; // ನಿಗದಿತ ದಿನಾಂಕ (SLA Due Date)
+  lastMovedDate?: string;
+  updatedAt?: string;
 }
 
 export interface DakRegisterSummary {
@@ -625,6 +633,7 @@ export interface GeneralLetterFormData {
 export type AppNavTab = 
   | 'home'
   | 'fileDashboard'
+  | 'hrms'
   | 'leaveCalendar'
   | 'pension'
   | 'generalLetter'
@@ -643,7 +652,125 @@ export type AppNavTab =
   | 'rti'
   | 'prapathra28'
   | 'circularStudio'
-  | 'masterAudit';
+  | 'masterAudit'
+  | 'pdfScanner'
+  | 'pdfCompressor'
+  | 'pdfMerger'
+  | 'jpgConverter'
+  | 'imageCompressor';
+
+// ==================== HRMS (HUMAN RESOURCE MANAGEMENT SYSTEM) TYPES ====================
+export interface HrmsTransferRecord {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  kgidNumber: string;
+  designation: string;
+  orderNumber: string;
+  orderDate: string;
+  issuingAuthority?: string; // ವರ್ಗಾವಣೆ ಆದೇಶ ನೀಡಿದ ಸಕ್ಷಮ ಪ್ರಾಧಿಕಾರ / ಅಧಿಕಾರಿಯ ವಿವರ (Issuing Authority)
+  orderFileUrl?: string; // ವರ್ಗಾವಣೆ ಆದೇಶದ ಪ್ರತಿ (Uploaded document / PDF / scan)
+  orderFileName?: string; // ಕಡತದ ಹೆಸರು (e.g. transfer_order_2026.pdf)
+  orderFileSize?: string;
+  orderUploadedAt?: string;
+  transferType: 'ಆಡಳಿತಾತ್ಮಕ ವರ್ಗಾವಣೆ' | 'ಕೌನ್ಸಿಲಿಂಗ್ ವರ್ಗಾವಣೆ' | 'ಪರಸ್ಪರ ವರ್ಗಾವಣೆ' | 'ಕೋರಿಕೆ ವರ್ಗಾವಣೆ' | 'ನಿಯೋಜನೆ';
+  fromOffice: string;
+  toOffice: string;
+  relievingDate?: string;
+  joiningDate?: string;
+  status: 'ಆದೇಶ ಜಾರಿ' | 'ಕಾರ್ಯಮುಕ್ತ' | 'ವರದಿ ಮಾಡಿಕೊಂಡಿದ್ದಾರೆ' | 'ಪ್ರಕ್ರಿಯೆಯಲ್ಲಿದೆ';
+  lpcGenerated: boolean;
+  notes?: string;
+}
+
+export interface HrmsLeaveSanctionRecord {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  kgidNumber: string;
+  designation: string;
+  leaveType: 'ಸಾಂದರ್ಭಿಕ ರಜೆ (CL)' | 'ಗಳಿಕೆ ರಜೆ (EL)' | 'ಅರ್ಧ ವೇತನ ರಜೆ (HPL)' | 'ಪರಿವರ್ತಿತ ರಜೆ (Commuted)' | 'ಶಿಶುಪಾಲನ ರಜೆ (CCL)' | 'ಹೆರಿಗೆ ರಜೆ (Maternity)' | 'ಪಿತೃತ್ವ ರಜೆ (Paternity)';
+  startDate: string;
+  endDate: string;
+  daysCount: number;
+  reason: string;
+  sanctionOrderNumber: string;
+  sanctionDate: string;
+  approvingAuthority: string;
+  status: 'ಮಂಜೂರಾಗಿದೆ' | 'ಪರಿಶೀಲನೆಯಲ್ಲಿದೆ' | 'ಶಿಫಾರಸು ಮಾಡಲಾಗಿದೆ' | 'ತಿರಸ್ಕರಿಸಲಾಗಿದೆ';
+}
+
+export interface HrmsPayBillRecord {
+  id: string;
+  billMonth: string; // e.g. 'ಮಾರ್ಚ್ ೨೦೨೬'
+  billYear: number;
+  billNumber: string;
+  ddoCode: string;
+  treasuryCode: string;
+  majorHead: string;
+  totalEmployees: number;
+  grossAmount: number;
+  totalDeductions: number;
+  netPayable: number;
+  tokenNumber?: string;
+  tokenDate?: string;
+  status: 'DDO ತಯಾರಿಸಿದೆ' | 'ಖಜಾನೆಗೆ ಸಲ್ಲಿಕೆ' | 'ಖಜಾನೆ ಪಾಸ್' | 'ಖಾತೆಗೆ ಜಮೆ';
+  generatedAt: string;
+}
+
+export interface HrmsAparRecord {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  kgidNumber: string;
+  designation: string;
+  cadre: string;
+  reportingYear: string;
+  selfAppraisalDate: string;
+  reportingOfficer: string;
+  reviewingOfficer: string;
+  overallGrading: 'ಅತ್ಯುತ್ತಮ (Outstanding)' | 'ಬಹಳ ಉತ್ತಮ (Very Good)' | 'ಉತ್ತಮ (Good)' | 'ಸಾಧಾರಣ (Average)';
+  adverseRemarks: boolean;
+  status: 'ಅಂತಿಮಗೊಂಡಿದೆ' | 'ಪರಿಶೀಲನೆಯಲ್ಲಿದೆ' | 'ಸ್ವಯಂ ಮೌಲ್ಯಮಾಪನ';
+}
+
+export interface HrmsLpcCertificate {
+  id: string;
+  employeeName: string;
+  kgidNumber: string;
+  hrmsCode: string;
+  designation: string;
+  fromOffice: string;
+  toOffice: string;
+  relievingDate: string;
+  lastBasicPay: number;
+  daAmount: number;
+  hraAmount: number;
+  medicalAllowance: number;
+  kgidPremium: number;
+  gpfNpsDeduction: number;
+  gisDeduction: number;
+  ptDeduction: number;
+  incomeTaxDeduction: number;
+  licDeduction: number;
+  festivalAdvanceBalance: number;
+  earnedLeaveBalance: number;
+  halfPayLeaveBalance: number;
+  ddoSignatory: string;
+  orderNumber: string;
+}
+
+export interface HrmsServiceBookEntry {
+  id: string;
+  entryDate: string;
+  category: 'ನೇಮಕಾತಿ' | 'ಪರಿವೀಕ್ಷಣಾ ಅವಧಿ' | 'ಸಕ್ರಮೀಕರಣ' | 'ವಾರ್ಷಿಕ ವೇತನ ಬಡ್ತಿ' | 'ಕಾಲಬದ್ಧ ಬಡ್ತಿ (TBAS)' | 'ವರ್ಗಾವಣೆ / ಸ್ಥಳನಿಯುಕ್ತಿ' | 'ಪದೋನ್ನತಿ' | 'ವಿಶೇಷ ಸೇವೆ';
+  orderNoAndDate: string;
+  details: string;
+  payScale: string;
+  basicPay: number;
+  verifiedByDdo: boolean;
+  verifiedDate?: string;
+}
 
 export type LeaveCategory = 
   | 'ಶಿಶುಪಾಲನ ರಜೆ (Child Care Leave)' 

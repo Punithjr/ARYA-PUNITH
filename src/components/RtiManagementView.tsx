@@ -24,7 +24,11 @@ import {
   Sparkles,
   ExternalLink,
   FileCheck2,
-  Check
+  Check,
+  Camera,
+  Paperclip,
+  UploadCloud,
+  Image as ImageIcon
 } from 'lucide-react';
 import { 
   RtiCaseRecord, 
@@ -35,7 +39,8 @@ import {
   AdminAuthUser, 
   EducationLetter, 
   MasterDocketFile,
-  OfficeConfig
+  OfficeConfig,
+  DocumentAttachment
 } from '../types';
 import { 
   fetchRtiCasesFromFirestore, 
@@ -43,12 +48,17 @@ import {
   deleteRtiCaseFromFirestore 
 } from '../lib/firebase';
 import { DEFAULT_PENSION_OFFICE_CONFIG } from '../utils/pensionCalculator';
+import { CaptureDocumentModal } from './CaptureDocumentModal';
 
 interface RtiManagementViewProps {
   currentUser?: AdminAuthUser | null;
   files: MasterDocketFile[];
   onSaveLetterToRegistry?: (letterData: Partial<EducationLetter>) => void;
   showToast: (msg: string) => void;
+  onUploadAttachmentToFile?: (fileId: string, attachment: DocumentAttachment) => Promise<void>;
+  onViewAttachment?: (attachment: DocumentAttachment) => void;
+  onCreateFile?: (fileData: Partial<MasterDocketFile>) => Promise<void>;
+  initialDocketFile?: MasterDocketFile | null;
 }
 
 // Initial Sample RTI Cases for Karnataka Education Department
@@ -134,7 +144,11 @@ export const RtiManagementView: React.FC<RtiManagementViewProps> = ({
   currentUser,
   files,
   onSaveLetterToRegistry,
-  showToast
+  showToast,
+  onUploadAttachmentToFile,
+  onViewAttachment,
+  onCreateFile,
+  initialDocketFile
 }) => {
   // Navigation Sub-Tabs
   const [activeSubTab, setActiveSubTab] = useState<'register' | 'entry' | 'letters' | 'appeals' | 'labels'>('register');
@@ -142,10 +156,209 @@ export const RtiManagementView: React.FC<RtiManagementViewProps> = ({
   const [selectedCase, setSelectedCase] = useState<RtiCaseRecord>(INITIAL_RTI_CASES[0]);
   const [selectedLetterFormat, setSelectedLetterFormat] = useState<RtiLetterFormatType>('info_furnish_letter');
   
+  // Document Capture via Device Camera State
+  const [isCaptureModalOpen, setIsCaptureModalOpen] = useState(false);
+  const [captureTargetDocketFile, setCaptureTargetDocketFile] = useState<MasterDocketFile | null>(null);
+  const [captureTargetCase, setCaptureTargetCase] = useState<RtiCaseRecord | null>(null);
+
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [editingCaseId, setEditingCaseId] = useState<string | null>(null);
+
+  // Auto select initial docket file if passed from parent
+  useEffect(() => {
+    if (initialDocketFile) {
+      const match = rtiCases.find(c => 
+        c.fileNumber === initialDocketFile.fileNumber || 
+        (initialDocketFile.rtiDetails && c.applicationNumber === initialDocketFile.rtiDetails.applicationNumber)
+      );
+      if (match) {
+        setSelectedCase(match);
+      }
+    }
+  }, [initialDocketFile, rtiCases]);
+
+  // Find matched docket file from master files list for any RTI case
+  const findDocketFileForCase = (c: RtiCaseRecord): MasterDocketFile | null => {
+    if (!c) return null;
+    return files.find(f => 
+      f.fileNumber === c.fileNumber ||
+      f.fileNumber.includes(c.fileNumber) ||
+      c.fileNumber.includes(f.fileNumber) ||
+      (f.rtiDetails && f.rtiDetails.applicationNumber === c.applicationNumber)
+    ) || null;
+  };
+
+  // Matched docket file for the currently selected RTI case
+  const selectedCaseDocketFile = useMemo<MasterDocketFile | null>(() => {
+    return findDocketFileForCase(selectedCase);
+  }, [files, selectedCase]);
+
+  // Consolidated documents for currently selected case
+  const selectedCaseAttachments = useMemo<DocumentAttachment[]>(() => {
+    const list: DocumentAttachment[] = [];
+    if (selectedCaseDocketFile) {
+      if (selectedCaseDocketFile.attachments) list.push(...selectedCaseDocketFile.attachments);
+      if (selectedCaseDocketFile.rtiDetails?.uploadedDocs) list.push(...selectedCaseDocketFile.rtiDetails.uploadedDocs);
+    }
+    // Deduplicate by ID or fileName
+    return list.filter((v, i, a) => a.findIndex(t => (t.id && t.id === v.id) || t.fileName === v.fileName) === i);
+  }, [selectedCaseDocketFile]);
+
+  // Open Device Camera Capture Modal for an RTI Case
+  const handleOpenCaptureForCase = async (c: RtiCaseRecord) => {
+    setCaptureTargetCase(c);
+    let docketFile = findDocketFileForCase(c);
+
+    // If no docket file exists yet in backend files list, auto-create one
+    if (!docketFile) {
+      try {
+        const res = await fetch('/api/files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subject: `ಮಾಹಿತಿ ಹಕ್ಕು ಅರ್ಜಿ: ${c.applicantName} - ${c.subject}`,
+            section: 'Administration & Services',
+            sectionCode: 'ಆ2',
+            sectionName: 'ಮಾಹಿತಿ ಹಕ್ಕು ಶಾಖೆ',
+            fileCategory: 'ಮಾಹಿತಿ ಹಕ್ಕು ಕಡತ (RTI & Legal)',
+            currentCustodian: c.assignedOfficer || 'ಕಛೇರಿ ಅಧೀಕ್ಷಕರು',
+            priority: 'Immediate',
+            fileNumber: c.fileNumber,
+            isRtiFile: true,
+            rtiDetails: {
+              applicationNumber: c.applicationNumber,
+              applicantName: c.applicantName,
+              applicantAddress: c.applicantAddress,
+              applicantPhone: c.applicantPhone,
+              receivedDate: c.receivedDate,
+              targetResponseDate: c.targetResponseDate,
+              feeDetails: c.feeMode,
+              informationSought: c.informationSought,
+              pioOfficer: c.assignedOfficer,
+              firstAppellateAuthority: c.firstAppellateAuthority,
+              uploadedDocs: []
+            },
+            notes: `RTI ಅರ್ಜಿ ಸಂಖ್ಯೆ: ${c.applicationNumber}. ಕಡತ: ${c.fileNumber}.`
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.file) {
+          docketFile = data.file;
+          if (onCreateFile) {
+            await onCreateFile(data.file);
+          }
+        }
+      } catch (e) {
+        console.warn('Auto create docket file note:', e);
+      }
+    }
+
+    if (!docketFile) {
+      docketFile = {
+        id: `file-rti-${c.id}`,
+        fileNumber: c.fileNumber,
+        subject: `ಮಾಹಿತಿ ಹಕ್ಕು ಅರ್ಜಿ - ${c.applicantName}: ${c.subject}`,
+        section: 'Administration & Services',
+        sectionCode: 'ಆ2',
+        sectionName: 'ಮಾಹಿತಿ ಹಕ್ಕು ಶಾಖೆ',
+        fileCategory: 'ಮಾಹಿತಿ ಹಕ್ಕು ಕಡತ (RTI & Legal)',
+        initiatedDate: c.receivedDate,
+        status: 'Active / Open',
+        currentCustodian: c.assignedOfficer || 'ಕಛೇರಿ ಅಧೀಕ್ಷಕರು',
+        priority: 'Immediate',
+        linkedLetterIds: [],
+        lettersCount: 0,
+        movementHistory: [],
+        notes: `RTI Case ${c.applicationNumber}`,
+        isRtiFile: true,
+        attachments: []
+      };
+    }
+
+    setCaptureTargetDocketFile(docketFile);
+    setIsCaptureModalOpen(true);
+  };
+
+  // Handler when document is captured and attached
+  const handleAttachCapturedDocument = async (fileId: string, newAtt: DocumentAttachment) => {
+    if (onUploadAttachmentToFile) {
+      await onUploadAttachmentToFile(fileId, newAtt);
+    } else {
+      const res = await fetch(`/api/files/${fileId}/attachments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAtt),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to attach');
+      }
+    }
+
+    // Add note to case record
+    if (captureTargetCase) {
+      const updatedNotes = [
+        ...(captureTargetCase.notes || []),
+        {
+          id: `n-${Date.now()}`,
+          author: currentUser?.fullName || 'ಸಾರ್ವಜನಿಕ ಮಾಹಿತಿ ಅಧಿಕಾರಿ',
+          date: new Date().toISOString().split('T')[0],
+          text: `ಕ್ಯಾಮರಾ ಮೂಲಕ ಕಾಗದ ದಾಖಲೆ ಸೆರೆಹಿಡಿದು ಕಡತಕ್ಕೆ ಲಗತ್ತಿಸಲಾಗಿದೆ: "${newAtt.fileName}"`
+        }
+      ];
+      const updatedCase: RtiCaseRecord = {
+        ...captureTargetCase,
+        notes: updatedNotes,
+        lastUpdated: new Date().toISOString().split('T')[0]
+      };
+      setRtiCases(prev => prev.map(c => c.id === updatedCase.id ? updatedCase : c));
+      if (selectedCase.id === updatedCase.id) {
+        setSelectedCase(updatedCase);
+      }
+      saveRtiCaseToFirestore(updatedCase).catch(() => {});
+    }
+  };
+
+  // File upload fallback handler for RTI case documents
+  const handleUploadRtiDocument = async (e: React.ChangeEvent<HTMLInputElement>, targetCase: RtiCaseRecord) => {
+    const uploadedFiles = e.target.files;
+    if (!uploadedFiles || uploadedFiles.length === 0) return;
+    
+    let docketFile = findDocketFileForCase(targetCase);
+    if (!docketFile) {
+      await handleOpenCaptureForCase(targetCase);
+      docketFile = findDocketFileForCase(targetCase) || captureTargetDocketFile;
+    }
+    if (!docketFile) return;
+
+    for (let i = 0; i < uploadedFiles.length; i++) {
+      const file = uploadedFiles[i];
+      const reader = new FileReader();
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      await new Promise<void>((resolve) => {
+        reader.onload = async () => {
+          const dataUrl = reader.result as string;
+          const newAtt: DocumentAttachment = {
+            id: `att-rti-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            fileName: file.name,
+            fileSize: file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(0)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+            fileType: file.type || (isPdf ? 'application/pdf' : 'image/jpeg'),
+            pageCount: isPdf ? 1 : undefined,
+            uploadedAt: new Date().toISOString().split('T')[0],
+            description: isPdf ? 'ಮಾಹಿತಿ ಹಕ್ಕು ಅರ್ಜಿ / ಅನುಬಂಧ ದಾಖಲೆ (PDF)' : 'ಸ್ಕ್ಯಾನ್ ಮಾಡಿದ ಕಾಗದ ಪ್ರತಿ (JPG)',
+            dataUrl,
+          };
+          await handleAttachCapturedDocument(docketFile!.id, newAtt);
+          resolve();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    showToast(`${uploadedFiles.length} ದಾಖಲೆಗಳು ಕಡತಕ್ಕೆ ಯಶಸ್ವಿಯಾಗಿ ಲಗತ್ತಿಸಲಾಗಿದೆ`);
+    e.target.value = '';
+  };
 
   // Form State for New Application
   const [formData, setFormData] = useState({
@@ -802,6 +1015,19 @@ ${c.informationSought}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {selectedCase && (
+              <button
+                id="btn-rti-banner-capture-doc"
+                type="button"
+                onClick={() => handleOpenCaptureForCase(selectedCase)}
+                className="px-3.5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs rounded-xl transition-all border-2 border-stone-800 shadow-[2px_2px_0px_#000] cursor-pointer flex items-center gap-1.5"
+                title="ಕ್ಯಾಮರಾದಿಂದ ಕಾಗದ ದಾಖಲೆಯ ಫೋಟೋ ತೆಗೆದು ಕಡತಕ್ಕೆ ಲಗತ್ತಿಸಿ (Capture Document via Camera)"
+              >
+                <Camera className="w-4 h-4 text-amber-300" />
+                <span>ದಾಖಲೆ ಸೆರೆಹಿಡಿ (Capture Document)</span>
+              </button>
+            )}
+
             <button
               onClick={() => {
                 setEditingCaseId(null);
@@ -1059,6 +1285,17 @@ ${c.informationSought}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              handleOpenCaptureForCase(c);
+                            }}
+                            className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 rounded border border-indigo-300 transition-all cursor-pointer"
+                            title="ದಾಖಲೆ ಸೆರೆಹಿಡಿ - ಕ್ಯಾಮೆರಾದಿಂದ ಫೋಟೋ ತೆಗೆದು ಕಡತಕ್ಕೆ ಲಗತ್ತಿಸಿ (Capture Document via Camera)"
+                          >
+                            <Camera className="w-3.5 h-3.5 text-indigo-700" />
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setSelectedCase(c);
                               setSelectedLetterFormat('info_furnish_letter');
                               setActiveSubTab('letters');
@@ -1087,6 +1324,118 @@ ${c.informationSought}
               </tbody>
             </table>
           </div>
+
+          {/* SELECTED CASE DOSSIER & ATTACHMENTS SECTION */}
+          {selectedCase && (
+            <div className="bg-stone-50 border-2 border-stone-800 rounded-xl p-4 shadow-[3px_3px_0px_#2b2b2b] space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-300">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-lg bg-stone-900 text-amber-300 flex items-center justify-center font-bold shrink-0">
+                    <FolderGit2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-mono font-bold bg-amber-200 text-stone-900 px-2 py-0.5 rounded border border-amber-400">
+                        {selectedCase.fileNumber}
+                      </span>
+                      <span className="text-[11px] font-mono text-stone-600">
+                        ಅರ್ಜಿ ಸಂ: <strong>{selectedCase.applicationNumber}</strong>
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-stone-200 text-stone-800 font-bold">
+                        {selectedCase.status}
+                      </span>
+                    </div>
+                    <div className="text-xs font-bold text-stone-900 mt-1 font-kannada">
+                      {selectedCase.applicantName} • <span className="font-normal text-stone-600">{selectedCase.subject}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    id="btn-rti-docket-capture-doc"
+                    type="button"
+                    onClick={() => handleOpenCaptureForCase(selectedCase)}
+                    className="px-3.5 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs rounded-lg transition-all border border-indigo-900 shadow-2xs cursor-pointer flex items-center gap-1.5"
+                    title="ಕ್ಯಾಮರಾದಿಂದ ಕಾಗದ ದಾಖಲೆ ಫೋಟೋ ತೆಗೆದು ಕಡತಕ್ಕೆ ಲಗತ್ತಿಸಿ (Capture Document via Camera)"
+                  >
+                    <Camera className="w-4 h-4 text-amber-300" />
+                    <span>ದಾಖಲೆ ಸೆರೆಹಿಡಿ (Capture Document)</span>
+                  </button>
+
+                  <label className="px-3 py-1.5 bg-white hover:bg-stone-100 text-stone-800 font-semibold text-xs rounded-lg transition-all border border-stone-300 shadow-2xs cursor-pointer flex items-center gap-1.5">
+                    <UploadCloud className="w-3.5 h-3.5 text-stone-600" />
+                    <span>ಫೈಲ್ ಅಪ್‌ಲೋಡ್ (Upload)</span>
+                    <input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      multiple
+                      onChange={(e) => handleUploadRtiDocument(e, selectedCase)}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* ATTACHED DOCUMENTS LIST */}
+              <div>
+                <div className="flex items-center justify-between text-xs font-bold text-stone-700 mb-2">
+                  <span className="flex items-center gap-1.5 font-kannada">
+                    <Paperclip className="w-3.5 h-3.5 text-stone-600" />
+                    <span>ಕಡತದ ಲಗತ್ತುಗಳು ಮತ್ತು ಸೆರೆಹಿಡಿದ ದಾಖಲೆ ಪ್ರತಿಗಳು (Attached Documents - PDF / JPG)</span>
+                  </span>
+                  <span className="text-[11px] font-mono text-stone-500">
+                    ಒಟ್ಟು: {selectedCaseAttachments.length} ದಾಖಲೆಗಳು
+                  </span>
+                </div>
+
+                {selectedCaseAttachments.length === 0 ? (
+                  <div className="p-4 bg-white rounded-lg border border-dashed border-stone-300 text-center text-xs text-stone-500 font-kannada">
+                    ಈ ಕಡತಕ್ಕೆ ಯಾವುದೇ ದಾಖಲೆ ಪ್ರತಿಗಳು ಲಗತ್ತಿಸಿಲ್ಲ. ಮೇಲಿನ <strong className="text-indigo-900">"ದಾಖಲೆ ಸೆರೆಹಿಡಿ"</strong> ಬಟನ್ ಕ್ಲಿಕ್ ಮಾಡಿ ಕ್ಯಾಮೆರಾದಿಂದ ಫೋಟೋ ತೆಗೆದು ಲಗತ್ತಿಸಿ.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                    {selectedCaseAttachments.map((att) => {
+                      const isPdf = att.fileType === 'application/pdf' || att.fileName.toLowerCase().endsWith('.pdf');
+                      return (
+                        <div
+                          key={att.id}
+                          className="bg-white p-2.5 rounded-lg border border-stone-300 shadow-2xs flex items-center justify-between gap-2 hover:border-amber-400 transition-colors"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className={`w-7 h-7 rounded flex items-center justify-center shrink-0 ${
+                              isPdf ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {isPdf ? <FileText className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-stone-800 truncate" title={att.fileName}>
+                                {att.fileName}
+                              </p>
+                              <p className="text-[10px] text-stone-500">
+                                {att.fileSize} • {att.uploadedAt}
+                              </p>
+                            </div>
+                          </div>
+
+                          {onViewAttachment && (
+                            <button
+                              type="button"
+                              onClick={() => onViewAttachment(att)}
+                              className="p-1 hover:bg-stone-100 text-sky-900 rounded cursor-pointer shrink-0"
+                              title="ದಾಖಲೆ ವೀಕ್ಷಿಸಿ (View Document)"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1434,6 +1783,16 @@ ${c.informationSought}
               </button>
 
               <button
+                type="button"
+                onClick={() => handleOpenCaptureForCase(selectedCase)}
+                className="bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold px-3 py-2 rounded-lg transition-all border-2 border-stone-800 shadow-[2px_2px_0px_#000] flex items-center gap-1.5 cursor-pointer"
+                title="ಕ್ಯಾಮರಾದಿಂದ ಕಾಗದ ದಾಖಲೆಯ ಫೋಟೋ ತೆಗೆದು ಕಡತಕ್ಕೆ ಲಗತ್ತಿಸಿ (Capture Document via Camera)"
+              >
+                <Camera className="w-3.5 h-3.5 text-amber-300" />
+                <span>ದಾಖಲೆ ಸೆರೆಹಿಡಿ (Capture Document)</span>
+              </button>
+
+              <button
                 onClick={() => {
                   const html = renderRtiLetterHtml(selectedLetterFormat, selectedCase);
                   navigator.clipboard.writeText(html);
@@ -1614,6 +1973,19 @@ ${c.informationSought}
             </div>
           </div>
         </div>
+      )}
+
+      {/* Capture Document via Device Camera Modal */}
+      {isCaptureModalOpen && captureTargetDocketFile && (
+        <CaptureDocumentModal
+          isOpen={isCaptureModalOpen}
+          onClose={() => setIsCaptureModalOpen(false)}
+          targetDocketFile={captureTargetDocketFile}
+          onAttachDocument={handleAttachCapturedDocument}
+          suggestedDocTitle={`RTI_${captureTargetCase?.applicationNumber?.replace(/[^a-zA-Z0-9]/g, '_') || 'ದಾಖಲೆ'}`}
+          defaultCategory="ಮೂಲ ಮಾಹಿತಿ ಹಕ್ಕು ಅರ್ಜಿ / ಪೂರಕ ದಾಖಲೆ ಪ್ರತಿ"
+          showToast={showToast}
+        />
       )}
     </div>
   );

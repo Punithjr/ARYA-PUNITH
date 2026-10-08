@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
+  ResponsiveContainer, 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  CartesianGrid, 
+  Legend 
+} from 'recharts';
+import { 
   Building2, 
   FileText, 
   Award, 
@@ -31,7 +41,10 @@ import {
   ChevronRight,
   ShieldCheck,
   FileSpreadsheet,
-  Calculator
+  Calculator,
+  TrendingUp,
+  FileDown,
+  Percent
 } from 'lucide-react';
 import { 
   PensionCaseRecord, 
@@ -52,8 +65,12 @@ import {
   numberToKannadaWords, 
   renderPensionFormatHtml,
   DEFAULT_PENSION_OFFICE_CONFIG,
-  KCSR_COMMUTATION_FACTORS
+  KCSR_COMMUTATION_FACTORS,
+  calculateQuickPensionEstimate,
+  generatePensionEstimateSlipHtml,
+  QuickPensionEstimateResult
 } from '../utils/pensionCalculator';
+import { calculateYearsServed } from './EmployeeRosterView';
 
 interface PensionStudioViewProps {
   currentUser?: AdminAuthUser | null;
@@ -315,8 +332,27 @@ export const PensionStudioView: React.FC<PensionStudioViewProps> = ({
   onAttachToDocketFile,
   showToast
 }) => {
-  // Navigation tabs within Pension Module: includes dedicated calculations tab
-  const [activeSubTab, setActiveSubTab] = useState<'cases' | 'input' | 'calculations' | 'letters' | 'checklist' | 'labels'>('cases');
+  // Navigation tabs within Pension Module: includes dedicated calculator, cases, and calculations tabs
+  const [activeSubTab, setActiveSubTab] = useState<'cases' | 'calculator' | 'input' | 'calculations' | 'letters' | 'checklist' | 'labels'>('cases');
+
+  // ---------------------------------------------------------------------------
+  // PENSION CALCULATOR TOOL STATE (Estimates total benefits from Years of Service & Basic Pay)
+  // ---------------------------------------------------------------------------
+  const [calcYearsOfService, setCalcYearsOfService] = useState<number | string>(30);
+  const [calcLastBasicPay, setCalcLastBasicPay] = useState<number | string>(68550);
+  const [calcSelectedEmpId, setCalcSelectedEmpId] = useState<string>('');
+  const [calcEmployeeName, setCalcEmployeeName] = useState<string>('ಶ್ರೀ ಗಿರಿಯಪ್ಪ ಎಚ್. (GIRIYAPPA H)');
+  const [calcDesignation, setCalcDesignation] = useState<string>('ಸಹ ಶಿಕ್ಷಕರು (Assistant Teacher)');
+  const [calcKgid, setCalcKgid] = useState<string>('1042891');
+  const [calcDaPercentage, setCalcDaPercentage] = useState<number>(42.5);
+  const [calcCommutationOpted, setCalcCommutationOpted] = useState<boolean>(true);
+  const [calcCommutationPercentage, setCalcCommutationPercentage] = useState<number>(40);
+  const [calcEarnedLeaveDays, setCalcEarnedLeaveDays] = useState<number>(300);
+  const [calcHalfPayLeaveDays, setCalcHalfPayLeaveDays] = useState<number>(38);
+  const [calcAgeNextBirthday, setCalcAgeNextBirthday] = useState<number>(61);
+  const [showSlipModal, setShowSlipModal] = useState<boolean>(false);
+  const [calcShowAdvanced, setCalcShowAdvanced] = useState<boolean>(false);
+  const [annualIncrementPercent, setAnnualIncrementPercent] = useState<number>(3);
 
   // Stored Pension Cases
   const [pensionCases, setPensionCases] = useState<PensionCaseRecord[]>(() => {
@@ -820,6 +856,364 @@ export const PensionStudioView: React.FC<PensionStudioViewProps> = ({
     showToast('ದಾಖಲಾತಿಯ HTML ಪಠ್ಯವನ್ನು ಕ್ಲಿಪ್‌ಬೋರ್ಡ್‌ಗೆ ನಕಲಿಸಲಾಗಿದೆ.');
   };
 
+  // ---------------------------------------------------------------------------
+  // PENSION CALCULATOR COMPUTATION & HANDLERS
+  // ---------------------------------------------------------------------------
+  // Compute live estimate using Karnataka Government 7th Pay Commission & KCSR rules
+  const quickEstimateResult: QuickPensionEstimateResult = useMemo(() => {
+    return calculateQuickPensionEstimate({
+      yearsOfService: Number(calcYearsOfService) || 0,
+      lastBasicPay: Number(calcLastBasicPay) || 0,
+      daPercentage: calcDaPercentage,
+      commutationOpted: calcCommutationOpted,
+      commutationPercentage: calcCommutationPercentage,
+      earnedLeaveDays: calcEarnedLeaveDays,
+      halfPayLeaveDays: calcHalfPayLeaveDays,
+      ageNextBirthday: calcAgeNextBirthday
+    });
+  }, [
+    calcYearsOfService,
+    calcLastBasicPay,
+    calcDaPercentage,
+    calcCommutationOpted,
+    calcCommutationPercentage,
+    calcEarnedLeaveDays,
+    calcHalfPayLeaveDays,
+    calcAgeNextBirthday
+  ]);
+
+  // Handle employee selection from Roster to auto-populate Years of Service and Last Basic Pay
+  const handleSelectEmployeeForCalc = (empId: string) => {
+    setCalcSelectedEmpId(empId);
+    if (!empId) return;
+    const emp = employees.find(e => e.id === empId);
+    if (!emp) return;
+
+    const empName = emp.fullName || emp.name || '';
+    setCalcEmployeeName(empName);
+    setCalcDesignation(emp.designation || 'ಶಿಕ್ಷಕರು / ಸಿಬ್ಬಂದಿ');
+    setCalcKgid(emp.kgidNumber || emp.employeeCode || '');
+    if (emp.basicPay) {
+      setCalcLastBasicPay(emp.basicPay);
+    }
+    if (emp.joiningDate) {
+      const served = calculateYearsServed(emp.joiningDate);
+      if (served) {
+        setCalcYearsOfService(served.decimalYears);
+      }
+    }
+    showToast(`ನೌಕರರ ವಿವರ & ಸೇವಾ ವರ್ಷಗಳನ್ನು ಲೋಡ್ ಮಾಡಲಾಗಿದೆ: ${empName}`);
+  };
+
+  // Handle copying calculation summary
+  const handleCopyCalcSummary = () => {
+    const summary = `
+================================================================
+ಕರ್ನಾಟಕ ಸರ್ಕಾರ - ನಿವೃತ್ತಿ ಸೌಲಭ್ಯಗಳ ಅಂದಾಜು ಲೆಕ್ಕಾಚಾರ (PENSION ESTIMATE)
+================================================================
+ನೌಕರರ ಹೆಸರು: ${calcEmployeeName || 'ನೌಕರರು'} (${calcDesignation || ''})
+ಕೆ.ಜಿ.ಐ.ಡಿ ಸಂಖ್ಯೆ: ${calcKgid || 'N/A'}
+ಸೇವಾ ಅವಧಿ (Years of Service): ${calcYearsOfService} ವರ್ಷಗಳು (${quickEstimateResult.completedHalfYears} ಅರ್ಧವರ್ಷಗಳು)
+ಕೊನೆಯ ಮೂಲ ವೇತನ (Last Basic Pay): ₹${formatINR(quickEstimateResult.lastBasicPay)}
+ತುಟ್ಟಿಭತ್ಯೆ ದರ (DA Rate): ${quickEstimateResult.daPercentage}% (₹${formatINR(quickEstimateResult.daAmount)})
+ಮಾಸಿಕ ಒಟ್ಟು ವೇತನ (Monthly Emoluments): ₹${formatINR(quickEstimateResult.monthlyEmoluments)}
+
+----------------------------------------------------------------
+೧. ಒಟ್ಟು ನಿವೃತ್ತಿ ಸೌಲಭ್ಯಗಳು (TOTAL TERMINAL BENEFITS - LUMP SUM):
+----------------------------------------------------------------
+• ನಿವೃತ್ತಿ ಉಪದಾನ (Retirement Gratuity/DCRG): ₹${formatINR(quickEstimateResult.dcrgSanctioned)}
+• ಪಿಂಚಣಿ ಪರಿವರ್ತನೆ ಇಡುಗಂಟು (Commutation - CVP 40%): ₹${formatINR(quickEstimateResult.commutationLumpSum)}
+• ರಜೆ ನಗದೀಕರಣ ಮೊತ್ತ (Leave Encashment): ₹${formatINR(quickEstimateResult.totalLeaveEncashment)}
+>>> ಒಟ್ಟು ಇಡುಗಂಟು ಸೌಲಭ್ಯಗಳು (GRAND TOTAL): ₹${formatINR(quickEstimateResult.totalTerminalBenefits)}
+(${numberToKannadaWords(quickEstimateResult.totalTerminalBenefits)})
+
+----------------------------------------------------------------
+೨. ಮಾಸಿಕ ಪಿಂಚಣಿ ಸೌಲಭ್ಯಗಳು (MONTHLY PENSION RECEIVABLE):
+----------------------------------------------------------------
+• ಪೂರ್ಣ ಮೂಲ ಪಿಂಚಣಿ (50% Basic): ₹${formatINR(quickEstimateResult.fullPension)}
+• ನಿವ್ವಳ ಮೂಲ ಪಿಂಚಣಿ (ಪರಿವರ್ತನೆ ನಂತರ): ₹${formatINR(quickEstimateResult.reducedMonthlyPension)}
+• ತುಟ್ಟಿ ಪರಿಹಾರ (Dearness Relief): ₹${formatINR(quickEstimateResult.dearnessRelief)}
+>>> ಒಟ್ಟು ಮಾಸಿಕ ಜಮೆ (MONTHLY NET RECEIVABLE): ₹${formatINR(quickEstimateResult.totalMonthlyReceivable)} / ತಿಂಗಳು
+
+----------------------------------------------------------------
+೩. ಕುಟುಂಬ ಪಿಂಚಣಿ (FAMILY PENSION):
+----------------------------------------------------------------
+• ಸಾಮಾನ್ಯ ದರ (30% Normal): ₹${formatINR(quickEstimateResult.familyPensionNormal)} / ತಿಂಗಳು
+• ಹೆಚ್ಚುವರಿ ದರ (50% Enhanced): ₹${formatINR(quickEstimateResult.familyPensionEnhanced)} / ತಿಂಗಳು
+================================================================
+    `.trim();
+
+    navigator.clipboard.writeText(summary);
+    showToast('ಪಿಂಚಣಿ ಅಂದಾಜು ಸಾರಾಂಶವನ್ನು ಕ್ಲಿಪ್‌ಬೋರ್ಡ್‌ಗೆ ನಕಲಿಸಲಾಗಿದೆ.');
+  };
+
+  // Convert Estimate to a New Pension Case in Sub-tab 2
+  const handleTransferToPensionCase = () => {
+    setEditingCaseId(null);
+    setFormData(prev => ({
+      ...prev,
+      employeeName: calcEmployeeName || prev.employeeName,
+      designation: calcDesignation || prev.designation,
+      kgidNumber: calcKgid || prev.kgidNumber,
+      lastBasicPay: Number(calcLastBasicPay) || prev.lastBasicPay,
+      averageEmoluments: Number(calcLastBasicPay) || prev.averageEmoluments,
+      daPercentage: calcDaPercentage,
+      commutationOpted: calcCommutationOpted,
+      commutationPercentage: calcCommutationPercentage,
+      earnedLeaveDays: calcEarnedLeaveDays,
+      halfPayLeaveDays: calcHalfPayLeaveDays,
+      remarks: `ಪಿಂಚಣಿ ಕ್ಯಾಲ್ಕುಲೇಟರ್‌ನಿಂದ ರಚಿಸಲಾಗಿದೆ (ಸೇವೆ: ${calcYearsOfService} ವರ್ಷಗಳು, ಮೂಲವೇತನ: ₹${calcLastBasicPay})`
+    }));
+    setActiveSubTab('input');
+    showToast('ಕ್ಯಾಲ್ಕುಲೇಟರ್‌ನ ದತ್ತಾಂಶವನ್ನು ಪಿಂಚಣಿ ಕಡತ ನಮೂದಿಗೆ ವರ್ಗಾಯಿಸಲಾಗಿದೆ.');
+  };
+
+  // 10-Year Retirement Benefits Growth Trendline Data Projection (Recharts)
+  const tenYearTrendData = useMemo(() => {
+    const currentPay = Number(calcLastBasicPay) || 50000;
+    const currentYears = Number(calcYearsOfService) || 25;
+    const daRate = Number(calcDaPercentage) || 42.5;
+    const commutationOpted = calcCommutationOpted;
+    const commPercent = Number(calcCommutationPercentage) || 40;
+    const leaveDays = Number(calcEarnedLeaveDays) || 300;
+    const hplDays = Number(calcHalfPayLeaveDays) || 30;
+
+    const data = [];
+    const baseEstimate = calculateQuickPensionEstimate({
+      yearsOfService: currentYears,
+      lastBasicPay: currentPay,
+      daPercentage: daRate,
+      commutationOpted,
+      commutationPercentage: commPercent,
+      earnedLeaveDays: leaveDays,
+      halfPayLeaveDays: hplDays
+    });
+
+    data.push({
+      year: 0,
+      yearLabel: 'ಪ್ರಸ್ತುತ (Now)',
+      basicPay: Math.round(currentPay),
+      terminalBenefits: Math.round(baseEstimate.totalTerminalBenefits),
+      monthlyPension: Math.round(baseEstimate.totalMonthlyReceivable),
+      gratuity: Math.round(baseEstimate.dcrgSanctioned),
+      commutation: Math.round(baseEstimate.commutationLumpSum),
+    });
+
+    for (let y = 1; y <= 10; y++) {
+      const projectedPay = currentPay * Math.pow(1 + annualIncrementPercent / 100, y);
+      const projectedYears = Math.min(33, currentYears + y);
+      const est = calculateQuickPensionEstimate({
+        yearsOfService: projectedYears,
+        lastBasicPay: projectedPay,
+        daPercentage: daRate + y * 2, // DA historically increases over time
+        commutationOpted,
+        commutationPercentage: commPercent,
+        earnedLeaveDays: leaveDays,
+        halfPayLeaveDays: hplDays
+      });
+
+      data.push({
+        year: y,
+        yearLabel: `+${y} ವ (${2026 + y})`,
+        basicPay: Math.round(projectedPay),
+        terminalBenefits: Math.round(est.totalTerminalBenefits),
+        monthlyPension: Math.round(est.totalMonthlyReceivable),
+        gratuity: Math.round(est.dcrgSanctioned),
+        commutation: Math.round(est.commutationLumpSum),
+      });
+    }
+
+    return data;
+  }, [
+    calcLastBasicPay, 
+    calcYearsOfService, 
+    calcDaPercentage, 
+    calcCommutationOpted, 
+    calcCommutationPercentage, 
+    calcEarnedLeaveDays, 
+    calcHalfPayLeaveDays, 
+    annualIncrementPercent
+  ]);
+
+  // Handle downloading official Service Record & Pension Projection summary document (PDF)
+  const handleDownloadServiceRecordPdf = () => {
+    const currentPay = Number(calcLastBasicPay) || 0;
+    const years = Number(calcYearsOfService) || 0;
+    const empName = calcEmployeeName || 'ನೌಕರರ ಹೆಸರು (ಹೆಸರು ನಮೂದಿಸಿಲ್ಲ)';
+    const desig = calcDesignation || 'ಸಹ ಶಿಕ್ಷಕರು';
+    const kgid = calcKgid || 'KGID-104928';
+    const qualifyingHalfYears = quickEstimateResult.completedHalfYears;
+    const gratuity = quickEstimateResult.dcrgSanctioned;
+    const commutation = quickEstimateResult.commutationLumpSum;
+    const totalLumpSum = quickEstimateResult.totalTerminalBenefits;
+    const basicPension = quickEstimateResult.fullPension;
+    const reducedPension = quickEstimateResult.reducedMonthlyPension;
+    const dearnessRelief = quickEstimateResult.dearnessRelief;
+    const monthlyNetPension = quickEstimateResult.totalMonthlyReceivable;
+    const familyNormal = quickEstimateResult.familyPensionNormal;
+    const familyEnhanced = quickEstimateResult.familyPensionEnhanced;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const html = `
+      <!DOCTYPE html>
+      <html lang="kn">
+        <head>
+          <meta charset="utf-8" />
+          <title>ಸೇವಾ ವಹಿ & ಪಿಂಚಣಿ ಸಾರಾಂಶ - ${empName}</title>
+          <style>
+            @page { size: A4 portrait; margin: 12mm; }
+            body { font-family: 'Noto Sans Kannada', Arial, sans-serif; color: #1c1917; font-size: 11px; line-height: 1.45; margin: 0; padding: 15px; }
+            .header { text-align: center; border-bottom: 2px solid #1c1917; padding-bottom: 10px; margin-bottom: 12px; }
+            .title { font-size: 15px; font-weight: bold; margin-bottom: 3px; color: #1c1917; }
+            .sub { font-size: 11px; color: #444; }
+            .badge { display: inline-block; background: #fef3c7; border: 1px solid #f59e0b; padding: 2px 8px; font-weight: bold; font-size: 10px; border-radius: 4px; margin-top: 4px; color: #78350f; }
+            .section-title { font-size: 12px; font-weight: bold; background: #f3f4f6; padding: 4px 8px; border-left: 4px solid #d97706; margin-top: 12px; margin-bottom: 6px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 10.5px; }
+            th, td { border: 1px solid #d1d5db; padding: 5px 7px; text-align: left; }
+            th { background: #f9fafb; font-weight: bold; color: #374151; }
+            .amount { font-family: monospace; font-weight: bold; text-align: right; }
+            .total-row { background: #fef3c7; font-weight: bold; }
+            .footer-signs { display: flex; justify-content: space-between; margin-top: 35px; padding-top: 15px; }
+            .sign-box { text-align: center; width: 45%; }
+            .sign-line { border-top: 1px dashed #4b5563; margin-top: 45px; padding-top: 4px; font-size: 10.5px; }
+            @media print { body { padding: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div style="font-weight: bold; font-size: 10.5px; text-transform: uppercase;">ಕರ್ನಾಟಕ ಸರ್ಕಾರ • ಶಾಲಾ ಶಿಕ್ಷಣ ಮತ್ತು ಸಾಕ್ಷರತಾ ಇಲಾಖೆ</div>
+            <div class="title">ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಾರ್ಯಾಲಯ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು</div>
+            <div class="sub">ಸರ್ಕಾರಿ ನೌಕರರ ಅಧಿಕೃತ ಸೇವಾ ವಹಿ ಹಾಗೂ ನಿವೃತ್ತಿ ವೇತನ ಸೌಲಭ್ಯಗಳ ಸಾರಾಂಶ ಪತ್ರ</div>
+            <div class="badge">KCSR ನಿಯಮಾವಳಿಗಳು • ೭ನೇ ರಾಜ್ಯ ವೇತನ ಆಯೋಗ (42.5% DA)</div>
+          </div>
+
+          <div class="section-title">೧. ನೌಕರರ ಸೇವಾ ವಿವರಗಳು (Employee Service Summary)</div>
+          <table>
+            <tr>
+              <th width="25%">ನೌಕರರ ಪೂರ್ಣ ಹೆಸರು:</th>
+              <td width="35%"><strong>${empName}</strong></td>
+              <th width="20%">ಹುದ್ದೆಯ ಹೆಸರು:</th>
+              <td width="20%">${desig}</td>
+            </tr>
+            <tr>
+              <th>KGID / HRMS ಸಂಖ್ಯೆ:</th>
+              <td style="font-family: monospace;">${kgid}</td>
+              <th>ಕಛೇರಿ / ಶಾಲೆಯ ಹೆಸರು:</th>
+              <td>ಸರ್ಕಾರಿ ಹಿರಿಯ ಪ್ರಾಥಮಿಕ / ಪ್ರೌಢಶಾಲೆ, ಭದ್ರಾವತಿ</td>
+            </tr>
+            <tr>
+              <th>ಪರಿಗಣಿತ ಅರ್ಹತಾ ಸೇವೆ:</th>
+              <td><strong>${years} ವರ್ಷಗಳು</strong></td>
+              <th>ಒಟ್ಟು ಅರ್ಧವರ್ಷಗಳು:</th>
+              <td style="font-family: monospace;">${qualifyingHalfYears} ಅರ್ಧವರ್ಷಗಳು (ಗರಿಷ್ಠ ೬೦)</td>
+            </tr>
+            <tr>
+              <th>ಕೊನೆಯ ಮೂಲ ವೇತನ:</th>
+              <td class="amount">₹${formatINR(currentPay)}</td>
+              <th>ತುಟ್ಟಿಭತ್ಯೆ (DA @ 42.5%):</th>
+              <td class="amount">₹${formatINR(Math.round(currentPay * 0.425))}</td>
+            </tr>
+          </table>
+
+          <div class="section-title">೨. ನಿವೃತ್ತಿ ಇಡುಗಂಟು ಸೌಲಭ್ಯಗಳು (Terminal Lump Sum Benefits)</div>
+          <table>
+            <thead>
+              <tr>
+                <th width="8%">ಕ್ರ.ಸಂ</th>
+                <th>ಸೌಲಭ್ಯದ ವಿವರ</th>
+                <th>ಸೂತ್ರ / ನಿಯಮಾವಳಿ</th>
+                <th style="text-align: right;" width="25%">ಅಂದಾಜು ಮೊತ್ತ (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>೧</td>
+                <td><strong>ನಿವೃತ್ತಿ ಉಪದಾನ (DCRG / Gratuity)</strong></td>
+                <td>(ವೇತನ + DA) ÷ ೪ × ${Math.min(66, qualifyingHalfYears)} ಅರ್ಧವರ್ಷಗಳು (ಗರಿಷ್ಠ ₹೨೦ ಲಕ್ಷ)</td>
+                <td class="amount">₹${formatINR(gratuity)}</td>
+              </tr>
+              <tr>
+                <td>೨</td>
+                <td><strong>ಪಿಂಚಣಿ ಪರಿವರ್ತನೆ ಇಡುಗಂಟು (Commutation - CVP 40%)</strong></td>
+                <td>೪೦% ಪರಿವರ್ತನೆ × ೧೨ × ೮.೧೯೪ ಗುಣಕ</td>
+                <td class="amount">₹${formatINR(commutation)}</td>
+              </tr>
+              <tr>
+                <td>೩</td>
+                <td><strong>ಗಳಿಕೆ ರಜೆ ನಗದೀಕರಣ (${quickEstimateResult.earnedLeaveDays} ದಿನ)</strong></td>
+                <td>(ವೇತನ + DA) ÷ ೩೦ × ${quickEstimateResult.earnedLeaveDays} ದಿನಗಳು</td>
+                <td class="amount">₹${formatINR(quickEstimateResult.leaveEncashmentAmount)}</td>
+              </tr>
+              <tr>
+                <td>೪</td>
+                <td><strong>ಅರೆವೇತನ ರಜೆ ನಗದೀಕರಣ (${quickEstimateResult.halfPayLeaveDays} ದಿನ)</strong></td>
+                <td>(ಅರೆವೇತನ + DA) ÷ ೩೦ × ${quickEstimateResult.halfPayLeaveDays} ದಿನಗಳು</td>
+                <td class="amount">₹${formatINR(quickEstimateResult.halfPayEncashmentAmount)}</td>
+              </tr>
+              <tr class="total-row">
+                <td colspan="3" style="text-align: right;"><strong>ಒಟ್ಟು ನಿವೃತ್ತಿ ಇಡುಗಂಟು (Grand Total Lump Sum):</strong></td>
+                <td class="amount" style="font-size: 12px; color: #92400e;">₹${formatINR(totalLumpSum)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="section-title">೩. ಮಾಸಿಕ ನಿವ್ವಳ ಪಿಂಚಣಿ ವಿವರಗಳು (Monthly Net Pension Receivable)</div>
+          <table>
+            <tr>
+              <th width="35%">ಪೂರ್ಣ ಮೂಲ ಪಿಂಚಣಿ (Gross 50%):</th>
+              <td class="amount" width="15%">₹${formatINR(basicPension)}</td>
+              <th width="35%">೪೦% ಪರಿವರ್ತನೆ ಕಡಿತ (CVP Deduction):</th>
+              <td class="amount" width="15%">-₹${formatINR(quickEstimateResult.commutedPortion)}</td>
+            </tr>
+            <tr>
+              <th>ಕಡಿತದ ನಂತರದ ಮೂಲ ಪಿಂಚಣಿ:</th>
+              <td class="amount">₹${formatINR(reducedPension)}</td>
+              <th>ತುಟ್ಟಿ ಪರಿಹಾರ (Dearness Relief @ 42.5%):</th>
+              <td class="amount">₹${formatINR(dearnessRelief)}</td>
+            </tr>
+            <tr class="total-row">
+              <th colspan="2" style="text-align: right;">ನಿವ್ವಳ ಮಾಸಿಕ ಪಾವತಿ ಪಿಂಚಣಿ (Net Monthly Receivable):</th>
+              <td colspan="2" class="amount" style="font-size: 12px; color: #065f46;">₹${formatINR(monthlyNetPension)} / ತಿಂಗಳು</td>
+            </tr>
+            <tr>
+              <th>ಕುಟುಂಬ ಪಿಂಚಣಿ (ಸಾಮಾನ್ಯ ದರ 30%):</th>
+              <td class="amount">₹${formatINR(familyNormal)} / ತಿಂಗಳು</td>
+              <th>ಕುಟುಂಬ ಪಿಂಚಣಿ (ಹೆಚ್ಚುವರಿ ದರ 50%):</th>
+              <td class="amount">₹${formatINR(familyEnhanced)} / ತಿಂಗಳು</td>
+            </tr>
+          </table>
+
+          <div class="footer-signs">
+            <div class="sign-box">
+              <div class="sign-line">
+                ಲೆಕ್ಕ ಪರಿಶೋಧಕರು / ವಿಷಯ ನಿರ್ವಾಹಕರು<br/>
+                (ಪರಿಶೀಲಿಸಿದವರು)
+              </div>
+            </div>
+            <div class="sign-box">
+              <div class="sign-line">
+                ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ<br/>
+                ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು (ದೃಢೀಕರಿಸಿದವರು)
+              </div>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    showToast('ಸೇವಾ ವಹಿ & ಪಿಂಚಣಿ ಸಾರಾಂಶ ದಾಖಲೆಯನ್ನು ಮುದ್ರಣಕ್ಕೆ ಸಿದ್ಧಪಡಿಸಲಾಗಿದೆ.');
+  };
+
   // Filtered cases
   const filteredCases = useMemo(() => {
     return pensionCases.filter(c => {
@@ -886,13 +1280,23 @@ export const PensionStudioView: React.FC<PensionStudioViewProps> = ({
               <span className="font-bold text-base text-sky-400 font-mono-code">{formatINR(stats.totalTerminalLumpSum)}</span>
             </div>
             <button
+              type="button"
+              onClick={() => setActiveSubTab('calculator')}
+              className="bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 border-2 border-stone-900 shadow-[2px_2px_0px_#000] cursor-pointer"
+              title="ಪಿಂಚಣಿ ಕ್ಯಾಲ್ಕುಲೇಟರ್ ಪರಿಕರ - ಸೇವಾ ವರ್ಷಗಳು & ಮೂಲವೇತನ ಆಧಾರಿತ ನಿವೃತ್ತಿ ಸೌಲಭ್ಯಗಳ ಅಂದಾಜು"
+            >
+              <Calculator className="w-4 h-4 text-stone-950" />
+              <span>ಪಿಂಚಣಿ ಕ್ಯಾಲ್ಕುಲೇಟರ್</span>
+              <span className="text-[10px] bg-stone-950 text-amber-300 px-1 py-0.5 rounded font-black font-mono">TOOL</span>
+            </button>
+            <button
               onClick={() => {
                 setEditingCaseId(null);
                 setActiveSubTab('input');
               }}
-              className="bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 shadow-[2px_2px_0px_#000] cursor-pointer"
+              className="bg-stone-800 hover:bg-stone-700 text-amber-300 font-bold px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 border border-stone-700 shadow-[2px_2px_0px_#000] cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4 text-emerald-400" />
               <span>ಹೊಸ ಪಿಂಚಣಿ ಪ್ರಕರಣ</span>
             </button>
           </div>
@@ -912,6 +1316,20 @@ export const PensionStudioView: React.FC<PensionStudioViewProps> = ({
           >
             <FolderGit2 className="w-4 h-4 text-amber-500" />
             <span>೧. ಪ್ರಕರಣಗಳು & ಕಡತಗಳು ({pensionCases.length})</span>
+          </button>
+
+          {/* Dedicated Pension Calculator Tool Tab */}
+          <button
+            onClick={() => setActiveSubTab('calculator')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border-2 border-stone-800 ${
+              activeSubTab === 'calculator'
+                ? 'bg-amber-400 text-stone-950 shadow-[3px_3px_0px_#000] ring-1 ring-amber-500'
+                : 'bg-white text-stone-800 hover:bg-amber-50 shadow-[2px_2px_0px_#2b2b2b]'
+            }`}
+          >
+            <Calculator className="w-4 h-4 text-amber-600" />
+            <span>೨. ಪಿಂಚಣಿ ಕ್ಯಾಲ್ಕುಲೇಟರ್ (Pension Calculator)</span>
+            <span className="text-[9px] bg-amber-200 text-amber-900 px-1 py-0.2 rounded font-mono font-bold">ಪರಿಕರ</span>
           </button>
 
           <button
@@ -962,7 +1380,7 @@ export const PensionStudioView: React.FC<PensionStudioViewProps> = ({
             }`}
           >
             <Plus className="w-4 h-4 text-emerald-600" />
-            <span>೨. ದತ್ತಾಂಶ ನಮೂದು & ವಯೋನಿವೃತ್ತಿ ಪರಿಶೀಲನೆ</span>
+            <span>೩. ದತ್ತಾಂಶ ನಮೂದು & ವಯೋನಿವೃತ್ತಿ ಪರಿಶೀಲನೆ</span>
           </button>
 
           <button
@@ -974,7 +1392,7 @@ export const PensionStudioView: React.FC<PensionStudioViewProps> = ({
             }`}
           >
             <Calculator className="w-4 h-4 text-amber-500" />
-            <span>೩. ೪ ಪ್ರತ್ಯೇಕ ಲೆಕ್ಕಾಚಾರಗಳು (4 Calculations)</span>
+            <span>೪. ೪ ಪ್ರತ್ಯೇಕ ಲೆಕ್ಕಾಚಾರಗಳು (4 Calculations)</span>
           </button>
 
           <button
@@ -986,7 +1404,7 @@ export const PensionStudioView: React.FC<PensionStudioViewProps> = ({
             }`}
           >
             <FileText className="w-4 h-4 text-sky-600" />
-            <span>೪. ಅಧಿಕೃತ ನಮೂನೆಗಳು & ಮಂಜೂರಾತಿ ಆದೇಶಗಳು</span>
+            <span>೫. ಅಧಿಕೃತ ನಮೂನೆಗಳು & ಮಂಜೂರಾತಿ ಆದೇಶಗಳು</span>
           </button>
 
           <button
@@ -998,7 +1416,7 @@ export const PensionStudioView: React.FC<PensionStudioViewProps> = ({
             }`}
           >
             <CheckSquare className="w-4 h-4 text-indigo-600" />
-            <span>೫. ದಾಖಲೆಗಳ ಪರಿಶೀಲನಾ ಪಟ್ಟಿ</span>
+            <span>೬. ದಾಖಲೆಗಳ ಪರಿಶೀಲನಾ ಪಟ್ಟಿ</span>
           </button>
 
           <button
@@ -1010,7 +1428,7 @@ export const PensionStudioView: React.FC<PensionStudioViewProps> = ({
             }`}
           >
             <Tag className="w-4 h-4 text-purple-600" />
-            <span>೬. ಕಡತ ಅಂಟಿಸುವ ಲೇಬಲ್‌ಗಳು (Docket Labels)</span>
+            <span>೭. ಕಡತ ಅಂಟಿಸುವ ಲೇಬಲ್‌ಗಳು (Docket Labels)</span>
           </button>
         </div>
 
@@ -1148,6 +1566,27 @@ export const PensionStudioView: React.FC<PensionStudioViewProps> = ({
                         <button
                           onClick={() => {
                             setSelectedCase(c);
+                            setCalcEmployeeName(c.employeeName);
+                            setCalcDesignation(c.designation);
+                            setCalcKgid(c.kgidNumber);
+                            setCalcLastBasicPay(c.lastBasicPay);
+                            setCalcYearsOfService(c.calculation.completedSixMonthlyPeriods / 2);
+                            setCalcDaPercentage(c.daPercentage);
+                            setCalcEarnedLeaveDays(c.earnedLeaveDays);
+                            setCalcHalfPayLeaveDays(c.halfPayLeaveDays);
+                            setActiveSubTab('calculator');
+                            showToast(`ಪಿಂಚಣಿ ಕ್ಯಾಲ್ಕುಲೇಟರ್‌ಗೆ ಲೋಡ್ ಮಾಡಲಾಗಿದೆ: ${c.employeeName}`);
+                          }}
+                          className="bg-amber-100 hover:bg-amber-200 text-amber-950 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border border-stone-800 shadow-[1.5px_1.5px_0px_#000] flex items-center gap-1 cursor-pointer"
+                          title="ಪಿಂಚಣಿ ಕ್ಯಾಲ್ಕುಲೇಟರ್ ಪರಿಕರದಲ್ಲಿ ಲೆಕ್ಕ ಹಾಕಿ"
+                        >
+                          <Calculator className="w-3.5 h-3.5 text-amber-800" />
+                          <span>ಕ್ಯಾಲ್ಕುಲೇಟರ್</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setSelectedCase(c);
                             setSelectedFormat('form7');
                             setActiveSubTab('letters');
                           }}
@@ -1230,6 +1669,742 @@ export const PensionStudioView: React.FC<PensionStudioViewProps> = ({
                 );
               })
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* DEDICATED PENSION CALCULATOR TOOL (Years of Service & Last Basic Pay)    */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'calculator' && (
+        <div className="space-y-5">
+          {/* Top Banner & Quick Controls */}
+          <div className="bg-stone-900 text-stone-100 p-5 rounded-2xl border-2 border-stone-800 shadow-[4px_4px_0px_#2b2b2b] flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="bg-amber-400 text-stone-950 px-2 py-0.5 rounded text-[11px] font-black tracking-wide font-mono">
+                  7TH PAY COMMISSION • KCSR RULES
+                </span>
+                <span className="bg-stone-800 text-amber-300 px-2 py-0.5 rounded text-[11px] font-bold border border-stone-700">
+                  ಅಧಿಕೃತ ಪಿಂಚಣಿ ಕ್ಯಾಲ್ಕುಲೇಟರ್
+                </span>
+              </div>
+              <h2 className="text-lg sm:text-xl font-black text-amber-300 font-kannada flex items-center gap-2">
+                <Calculator className="w-6 h-6 text-amber-400" />
+                <span>ನಿವೃತ್ತಿ ಸೌಲಭ್ಯಗಳ ತ್ವರಿತ ಪಿಂಚಣಿ ಕ್ಯಾಲ್ಕುಲೇಟರ್ (Pension Calculator Tool)</span>
+              </h2>
+              <p className="text-xs text-stone-400 font-kannada max-w-3xl">
+                ಸೇವಾ ವರ್ಷಗಳು (Years of Service) ಮತ್ತು ಕೊನೆಯ ಮೂಲ ವೇತನ (Last Basic Pay) ಆಧಾರದ ಮೇಲೆ ಕರ್ನಾಟಕ ಸರ್ಕಾರದ ನಿಯಮಾವಳಿಗಳಂತೆ ನಿವೃತ್ತಿ ಉಪದಾನ, ಪರಿವರ್ತನೆ ಇಡುಗಂಟು, ರಜೆ ನಗದೀಕರಣ ಮತ್ತು ಮಾಸಿಕ ಪಿಂಚಣಿಯ ನಿಖರ ಅಂದಾಜು.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleDownloadServiceRecordPdf}
+                className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition-all border-2 border-stone-900 shadow-[2px_2px_0px_#000] cursor-pointer flex items-center gap-1.5"
+                title="ಸೇವಾ ವಹಿ & ಪಿಂಚಣಿ ಸಾರಾಂಶ ದಾಖಲೆ PDF ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ (Download Service Record PDF)"
+              >
+                <FileDown className="w-4 h-4 text-white" />
+                <span>Download Service Record PDF</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowSlipModal(true)}
+                className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs rounded-xl transition-all border-2 border-stone-900 shadow-[2px_2px_0px_#000] cursor-pointer flex items-center gap-1.5"
+                title="ಅಂದಾಜು ಲೆಕ್ಕಾಚಾರ ಪಟ್ಟಿ ಮುದ್ರಿಸಿ"
+              >
+                <Printer className="w-4 h-4" />
+                <span>ಅಂದಾಜು ಪಟ್ಟಿ ಮುದ್ರಿಸಿ</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopyCalcSummary}
+                className="px-3.5 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs rounded-xl transition-all border border-stone-700 shadow-sm cursor-pointer flex items-center gap-1.5"
+                title="ಸಾರಾಂಶ ನಕಲಿಸಿ"
+              >
+                <Copy className="w-4 h-4" />
+                <span>ಸಾರಾಂಶ ನಕಲಿಸಿ</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleTransferToPensionCase}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition-all border border-emerald-700 shadow-sm cursor-pointer flex items-center gap-1.5"
+                title="ಈ ಅಂದಾಜನ್ನು ಅಧಿಕೃತ ಪಿಂಚಣಿ ಕಡತಕ್ಕೆ ಪರಿವರ್ತಿಸಿ"
+              >
+                <ArrowRight className="w-4 h-4" />
+                <span>ಪ್ರಕರಣಕ್ಕೆ ವರ್ಗಾಯಿಸಿ</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Main 2-Column Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            {/* LEFT COLUMN: Input Fields (5 Columns) */}
+            <div className="lg:col-span-5 space-y-4">
+              <div className="bg-white p-5 rounded-2xl border-2 border-stone-800 shadow-[4px_4px_0px_#2b2b2b] space-y-5">
+                <div className="pb-3 border-b-2 border-stone-800 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-600" />
+                    <h3 className="font-bold text-stone-900 text-sm font-kannada">
+                      ಮೂಲ ದತ್ತಾಂಶ ನಮೂದು (Calculator Inputs)
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCalcYearsOfService(30);
+                      setCalcLastBasicPay(68550);
+                      setCalcDaPercentage(42.5);
+                      setCalcCommutationOpted(true);
+                      setCalcCommutationPercentage(40);
+                      setCalcEarnedLeaveDays(300);
+                      setCalcHalfPayLeaveDays(38);
+                      setCalcSelectedEmpId('');
+                      showToast('ಮೂಲ ಮೌಲ್ಯಗಳಿಗೆ ಮರುಹೊಂದಿಸಲಾಗಿದೆ.');
+                    }}
+                    className="text-stone-500 hover:text-stone-900 text-xs flex items-center gap-1 cursor-pointer font-bold"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>ರೀಸೆಟ್</span>
+                  </button>
+                </div>
+
+                {/* Optional Employee Quick Loader from Roster */}
+                <div className="space-y-1.5 bg-amber-50/70 p-3 rounded-xl border border-amber-200">
+                  <label className="text-xs font-bold text-stone-800 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-amber-700" />
+                      <span>ನೌಕರರ ರೋಸ್ಟರ್‌ನಿಂದ ಸ್ವಯಂ-ಭರ್ತಿ (ಐಚ್ಛಿಕ)</span>
+                    </span>
+                    <span className="text-[10px] text-amber-800 bg-amber-200 px-1.5 py-0.5 rounded font-bold font-mono">
+                      Auto-Fill Roster
+                    </span>
+                  </label>
+                  <select
+                    value={calcSelectedEmpId}
+                    onChange={e => handleSelectEmployeeForCalc(e.target.value)}
+                    className="w-full text-xs border border-stone-400 rounded-lg p-2 bg-white focus:ring-2 focus:ring-amber-500 font-bold text-stone-800"
+                  >
+                    <option value="">-- ಸಿಬ್ಬಂದಿ ಪಟ್ಟಿಯಿಂದ ಆಯ್ಕೆಮಾಡಿ (Select Employee) --</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.fullName || emp.name} - {emp.designation} (ಮೂಲವೇತನ: ₹{emp.basicPay || 'N/A'})
+                      </option>
+                    ))}
+                  </select>
+                  {calcEmployeeName && (
+                    <div className="text-[11px] text-stone-600 pt-1 flex items-center justify-between">
+                      <span>ಆಯ್ಕೆ: <strong>{calcEmployeeName}</strong> ({calcDesignation})</span>
+                      {calcKgid && <span className="font-mono-code font-bold text-amber-900">KGID: {calcKgid}</span>}
+                    </div>
+                  )}
+                </div>
+
+                {/* PRIMARY FIELD 1: Years of Service */}
+                <div className="space-y-2 p-3.5 bg-stone-50 rounded-xl border-2 border-stone-800">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-stone-900 font-kannada flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-amber-600" />
+                      <span>೧. ಸೇವಾ ವರ್ಷಗಳು (Years of Service) *</span>
+                    </label>
+                    <span className="text-[11px] font-mono-code font-bold bg-stone-900 text-amber-400 px-2 py-0.5 rounded">
+                      {quickEstimateResult.completedHalfYears} ಅರ್ಧವರ್ಷಗಳು
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      max="45"
+                      value={calcYearsOfService}
+                      onChange={e => setCalcYearsOfService(e.target.value)}
+                      className="w-full text-lg font-bold font-mono-code border-2 border-stone-800 rounded-xl py-2.5 px-3 bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                      placeholder="ಉದಾ: 30"
+                    />
+                    <span className="absolute right-3 top-3 text-xs font-bold text-stone-500 font-mono-code">
+                      ವರ್ಷಗಳು (Years)
+                    </span>
+                  </div>
+
+                  {/* Quick Stepper Buttons */}
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setCalcYearsOfService(prev => Math.max(0, +(+prev - 1).toFixed(1)))}
+                      className="px-2 py-1 bg-white hover:bg-stone-200 border border-stone-400 rounded text-xs font-bold font-mono cursor-pointer"
+                    >
+                      -1 yr
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCalcYearsOfService(prev => Math.max(0, +(+prev - 0.5).toFixed(1)))}
+                      className="px-2 py-1 bg-white hover:bg-stone-200 border border-stone-400 rounded text-xs font-bold font-mono cursor-pointer"
+                    >
+                      -0.5 yr
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCalcYearsOfService(prev => +(+prev + 0.5).toFixed(1))}
+                      className="px-2 py-1 bg-white hover:bg-stone-200 border border-stone-400 rounded text-xs font-bold font-mono cursor-pointer"
+                    >
+                      +0.5 yr
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCalcYearsOfService(prev => +(+prev + 1).toFixed(1))}
+                      className="px-2 py-1 bg-white hover:bg-stone-200 border border-stone-400 rounded text-xs font-bold font-mono cursor-pointer"
+                    >
+                      +1 yr
+                    </button>
+                  </div>
+
+                  {/* Preset Quick Chips */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[11px]">
+                    <span className="text-stone-500 text-[10px]">ತ್ವರಿತ ಆಯ್ಕೆ:</span>
+                    {[
+                      { label: '10 ವ (Min)', val: 10 },
+                      { label: '20 ವ', val: 20 },
+                      { label: '25 ವ', val: 25 },
+                      { label: '30 ವ (Full 50%)', val: 30 },
+                      { label: '33 ವ (Max DCRG)', val: 33 }
+                    ].map(p => (
+                      <button
+                        key={p.val}
+                        type="button"
+                        onClick={() => setCalcYearsOfService(p.val)}
+                        className={`px-2 py-0.5 rounded border text-xs font-bold transition-all cursor-pointer ${
+                          Number(calcYearsOfService) === p.val
+                            ? 'bg-amber-400 text-stone-950 border-stone-900 shadow-xs'
+                            : 'bg-white hover:bg-stone-100 text-stone-700 border-stone-300'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <p className="text-[11px] text-stone-500 font-kannada">
+                    {Number(calcYearsOfService) >= 30 ? (
+                      <span className="text-emerald-700 font-bold">✓ ೩೦ ವರ್ಷ ಪೂರ್ಣ - ೫೦% ಗರಿಷ್ಠ ಪೂರ್ಣ ಪಿಂಚಣಿಗೆ ಅರ್ಹರು (೬೦ ಅರ್ಧವರ್ಷಗಳು)</span>
+                    ) : Number(calcYearsOfService) >= 10 ? (
+                      <span className="text-amber-800 font-bold">ಅನುಪಾತಿಕ ಪಿಂಚಣಿ: {quickEstimateResult.completedHalfYears}/೬೦ ಭಾಗ</span>
+                    ) : (
+                      <span className="text-rose-700 font-bold">⚠️ ೧೦ ವರ್ಷಕ್ಕಿಂತ ಕಡಿಮೆ - ಸೇವಾ ಉಪದಾನ (Service Gratuity) ಮಾತ್ರ</span>
+                    )}
+                  </p>
+                </div>
+
+                {/* PRIMARY FIELD 2: Last Basic Pay */}
+                <div className="space-y-2 p-3.5 bg-stone-50 rounded-xl border-2 border-stone-800">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-stone-900 font-kannada flex items-center gap-1.5">
+                      <Award className="w-4 h-4 text-emerald-600" />
+                      <span>೨. ಕೊನೆಯ ಮೂಲ ವೇತನ (Last Basic Pay) *</span>
+                    </label>
+                    <span className="text-[11px] font-mono-code font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
+                      ₹{formatINR(Number(calcLastBasicPay) || 0)}
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-base font-bold text-stone-500">₹</span>
+                    <input
+                      type="number"
+                      step="50"
+                      min="10000"
+                      max="250000"
+                      value={calcLastBasicPay}
+                      onChange={e => setCalcLastBasicPay(e.target.value)}
+                      className="w-full text-lg font-bold font-mono-code border-2 border-stone-800 rounded-xl py-2.5 pl-8 pr-3 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      placeholder="ಉದಾ: 68550"
+                    />
+                  </div>
+
+                  {/* 7th Pay Commission Quick Pay Chips */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[11px]">
+                    <span className="text-stone-500 text-[10px]">೭ನೇ ವೇತನ ಶ್ರೇಣಿ:</span>
+                    {[37900, 43100, 53900, 68550, 76550, 98200].map(amt => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setCalcLastBasicPay(amt)}
+                        className={`px-2 py-0.5 rounded border text-xs font-mono font-bold transition-all cursor-pointer ${
+                          Number(calcLastBasicPay) === amt
+                            ? 'bg-emerald-600 text-white border-stone-900 shadow-xs'
+                            : 'bg-white hover:bg-stone-100 text-stone-700 border-stone-300'
+                        }`}
+                      >
+                        ₹{formatINR(amt)}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="text-[11px] text-stone-600">
+                    ವೇತನ ಅಕ್ಷರಗಳಲ್ಲಿ: <strong className="text-stone-900 font-kannada">{numberToKannadaWords(Number(calcLastBasicPay) || 0)}</strong>
+                  </div>
+                </div>
+
+                {/* Collapsible Fine Tuning Parameters */}
+                <div className="border border-stone-300 rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setCalcShowAdvanced(!calcShowAdvanced)}
+                    className="w-full p-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs flex items-center justify-between cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-stone-600" />
+                      <span>ಹೆಚ್ಚುವರಿ ನಿಯತಾಂಕಗಳು (DA %, ಪರಿವರ್ತನೆ, ರಜೆ ದಿನಗಳು)</span>
+                    </span>
+                    <span className="text-stone-500">{calcShowAdvanced ? '▲ ಮರೆಮಾಡಿ' : '▼ ವಿಸ್ತರಿಸಿ'}</span>
+                  </button>
+
+                  {calcShowAdvanced && (
+                    <div className="p-3 bg-white space-y-3 text-xs border-t border-stone-200">
+                      {/* DA Rate */}
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="font-bold text-stone-700">ತುಟ್ಟಿಭತ್ಯೆ ದರ (DA %):</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={calcDaPercentage}
+                            onChange={e => setCalcDaPercentage(Number(e.target.value))}
+                            className="w-20 p-1 border border-stone-400 rounded text-right font-mono font-bold"
+                          />
+                          <span className="font-mono">%</span>
+                        </div>
+                      </div>
+
+                      {/* Commutation Opted & Percentage */}
+                      <div className="space-y-1.5 pt-2 border-t border-stone-100">
+                        <div className="flex items-center justify-between">
+                          <label className="font-bold text-stone-700">ಪಿಂಚಣಿ ಪರಿವರ್ತನೆ (CVP):</label>
+                          <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={calcCommutationOpted}
+                              onChange={e => setCalcCommutationOpted(e.target.checked)}
+                              className="rounded text-amber-600 cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-stone-800">ಪರಿವರ್ತನೆ ಬಯಸಲಾಗಿದೆ (Opted)</span>
+                          </label>
+                        </div>
+                        {calcCommutationOpted && (
+                          <div className="grid grid-cols-2 gap-2 pt-1">
+                            <div>
+                              <span className="text-[10px] text-stone-500 block">ಪರಿವರ್ತನೆ ಶೇಕಡಾವಾರು (ಗರಿಷ್ಠ 40%):</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="40"
+                                value={calcCommutationPercentage}
+                                onChange={e => setCalcCommutationPercentage(Number(e.target.value))}
+                                className="w-full p-1 border border-stone-400 rounded font-mono font-bold text-xs"
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-stone-500 block">ವಯಸ್ಸು (ಮುಂದಿನ ಜನ್ಮದಿನ):</span>
+                              <input
+                                type="number"
+                                min="50"
+                                max="70"
+                                value={calcAgeNextBirthday}
+                                onChange={e => setCalcAgeNextBirthday(Number(e.target.value))}
+                                className="w-full p-1 border border-stone-400 rounded font-mono font-bold text-xs"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Leave Balances */}
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-stone-100">
+                        <div>
+                          <label className="font-bold text-stone-700 block text-[11px]">ಗಳಿಕೆ ರಜೆ (EL - ಗರಿಷ್ಠ 300):</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="300"
+                            value={calcEarnedLeaveDays}
+                            onChange={e => setCalcEarnedLeaveDays(Number(e.target.value))}
+                            className="w-full p-1 border border-stone-400 rounded font-mono font-bold text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-bold text-stone-700 block text-[11px]">ಅರ್ಧವೇತನ ರಜೆ (HPL ದಿನಗಳು):</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="300"
+                            value={calcHalfPayLeaveDays}
+                            onChange={e => setCalcHalfPayLeaveDays(Number(e.target.value))}
+                            className="w-full p-1 border border-stone-400 rounded font-mono font-bold text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Custom Employee Labels */}
+                      <div className="pt-2 border-t border-stone-100 space-y-1.5">
+                        <span className="text-[10px] text-stone-500 block font-bold">ಮುದ್ರಣಕ್ಕೆ ನೌಕರರ ಹೆಸರು & ವಿವರಗಳು:</span>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            placeholder="ನೌಕರರ ಹೆಸರು"
+                            value={calcEmployeeName}
+                            onChange={e => setCalcEmployeeName(e.target.value)}
+                            className="p-1 border border-stone-400 rounded text-xs"
+                          />
+                          <input
+                            type="text"
+                            placeholder="ಪದನಾಮ"
+                            value={calcDesignation}
+                            onChange={e => setCalcDesignation(e.target.value)}
+                            className="p-1 border border-stone-400 rounded text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN: Real-Time Results Dashboard (7 Columns) */}
+            <div className="lg:col-span-7 space-y-4">
+              {/* GRAND HERO CARD: Total Terminal Benefits */}
+              <div className="bg-gradient-to-br from-stone-900 via-stone-950 to-stone-900 text-white p-6 rounded-2xl border-2 border-stone-800 shadow-[5px_5px_0px_#2b2b2b] relative overflow-hidden">
+                <div className="relative z-10 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-amber-400 font-kannada font-bold text-xs tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      <span>ಒಟ್ಟು ನಿವೃತ್ತಿ ಸೌಲಭ್ಯಗಳು (TOTAL TERMINAL BENEFITS - LUMP SUM)</span>
+                    </span>
+                    <span className="bg-amber-400 text-stone-950 font-black text-[10px] px-2 py-0.5 rounded font-mono">
+                      ಇಡುಗಂಟು ಮೊತ್ತ
+                    </span>
+                  </div>
+
+                  <div className="text-3xl sm:text-4xl lg:text-5xl font-black font-mono-code text-amber-300 tracking-tight">
+                    ₹{formatINR(quickEstimateResult.totalTerminalBenefits)}
+                  </div>
+
+                  <div className="text-xs text-amber-100/90 font-kannada pt-1">
+                    ಅಕ್ಷರಗಳಲ್ಲಿ: <strong>{numberToKannadaWords(quickEstimateResult.totalTerminalBenefits)} ರೂಪಾಯಿಗಳು ಮಾತ್ರ</strong>
+                  </div>
+
+                  {/* Summary Breakdown Tags */}
+                  <div className="pt-3 border-t border-stone-800 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="bg-stone-800/90 text-stone-300 px-2.5 py-1 rounded-lg border border-stone-700">
+                      ಉಪದಾನ (DCRG): <strong className="text-sky-300 font-mono">₹{formatINR(quickEstimateResult.dcrgSanctioned)}</strong>
+                    </span>
+                    <span className="bg-stone-800/90 text-stone-300 px-2.5 py-1 rounded-lg border border-stone-700">
+                      ಪರಿವರ್ತನೆ (CVP): <strong className="text-purple-300 font-mono">₹{formatINR(quickEstimateResult.commutationLumpSum)}</strong>
+                    </span>
+                    <span className="bg-stone-800/90 text-stone-300 px-2.5 py-1 rounded-lg border border-stone-700">
+                      ರಜೆ ನಗದೀಕರಣ: <strong className="text-amber-300 font-mono">₹{formatINR(quickEstimateResult.totalLeaveEncashment)}</strong>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECONDARY HERO CARD: Monthly Net Pension */}
+              <div className="bg-emerald-950 text-emerald-100 p-5 rounded-2xl border-2 border-emerald-900 shadow-[4px_4px_0px_#064e3b]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] bg-emerald-400 text-stone-950 font-black px-2 py-0.5 rounded font-mono">
+                        MONTHLY PENSION
+                      </span>
+                      <span className="text-xs font-bold text-emerald-300 font-kannada">
+                        ಮಾಸಿಕ ನಿವ್ವಳ ಪಿಂಚಣಿ ಜಮೆ (Net Monthly Pension)
+                      </span>
+                    </div>
+                    <div className="text-2xl sm:text-3xl font-black font-mono-code text-white">
+                      ₹{formatINR(quickEstimateResult.totalMonthlyReceivable)}
+                      <span className="text-xs font-normal text-emerald-300 font-sans ml-2">/ ಪ್ರತಿ ತಿಂಗಳು</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-emerald-900/60 p-3 rounded-xl border border-emerald-800 text-xs space-y-1 sm:text-right">
+                    <div className="text-emerald-300">
+                      ಮೂಲ ಪಿಂಚಣಿ: <strong className="font-mono text-white">₹{formatINR(quickEstimateResult.reducedMonthlyPension)}</strong>
+                    </div>
+                    <div className="text-emerald-300">
+                      ತುಟ್ಟಿ ಪರಿಹಾರ ({quickEstimateResult.daPercentage}%): <strong className="font-mono text-white">₹{formatINR(quickEstimateResult.dearnessRelief)}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4-COMPONENT BENEFIT BREAKDOWN MATRIX */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {/* 1. Retirement Gratuity */}
+                <div className="bg-white p-4 rounded-xl border-2 border-stone-800 shadow-[3px_3px_0px_#2b2b2b] space-y-2">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-stone-200">
+                    <span className="font-bold text-xs text-stone-900 font-kannada">೧. ನಿವೃತ್ತಿ ಉಪದಾನ (DCRG)</span>
+                    <span className="text-[10px] bg-sky-100 text-sky-950 font-mono font-bold px-1.5 py-0.5 rounded">
+                      KCSR 292B
+                    </span>
+                  </div>
+                  <div className="text-xl font-black font-mono-code text-sky-800">
+                    ₹{formatINR(quickEstimateResult.dcrgSanctioned)}
+                  </div>
+                  <div className="text-[11px] text-stone-600 space-y-0.5">
+                    <div>ಅರ್ಧವರ್ಷಗಳು: <strong className="font-mono">{quickEstimateResult.gratuityHalfYears}</strong> (ಗರಿಷ್ಠ ೬೬)</div>
+                    <div>ಸೂತ್ರ: (ಮೂಲವೇತನ + DA) ÷ ೪ × {quickEstimateResult.gratuityHalfYears}</div>
+                    {quickEstimateResult.isDcrgCapped ? (
+                      <div className="text-amber-800 font-bold">⚠️ ₹೨೦,೦೦,೦೦೦ ಗರಿಷ್ಠ ಮಿತಿಗೆ ಮಿತಿಗೊಳಿಸಲಾಗಿದೆ</div>
+                    ) : (
+                      <div className="text-emerald-700 font-bold">✓ ₹೨೦ ಲಕ್ಷ ಮಿತಿಯೊಳಗಿದೆ</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. Commutation of Pension */}
+                <div className="bg-white p-4 rounded-xl border-2 border-stone-800 shadow-[3px_3px_0px_#2b2b2b] space-y-2">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-stone-200">
+                    <span className="font-bold text-xs text-stone-900 font-kannada">೨. ಪಿಂಚಣಿ ಪರಿವರ್ತನೆ (CVP)</span>
+                    <span className="text-[10px] bg-purple-100 text-purple-950 font-mono font-bold px-1.5 py-0.5 rounded">
+                      KCSR 376
+                    </span>
+                  </div>
+                  <div className="text-xl font-black font-mono-code text-purple-800">
+                    ₹{formatINR(quickEstimateResult.commutationLumpSum)}
+                  </div>
+                  <div className="text-[11px] text-stone-600 space-y-0.5">
+                    <div>ಪರಿವರ್ತಿತ ಭಾಗ: <strong className="font-mono">₹{formatINR(quickEstimateResult.commutedPortion)}</strong> ({quickEstimateResult.commutationPercentage}%)</div>
+                    <div>ಗುಣಕ (Factor): <strong className="font-mono">{quickEstimateResult.commutationFactor}</strong> (ವಯಸ್ಸು ೬೧)</div>
+                    <div>ಸೂತ್ರ: ಪರಿವರ್ತಿತ ಭಾಗ × ೧೨ × {quickEstimateResult.commutationFactor}</div>
+                  </div>
+                </div>
+
+                {/* 3. Leave Encashment */}
+                <div className="bg-white p-4 rounded-xl border-2 border-stone-800 shadow-[3px_3px_0px_#2b2b2b] space-y-2">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-stone-200">
+                    <span className="font-bold text-xs text-stone-900 font-kannada">೩. ರಜೆ ನಗದೀಕರಣ (Encashment)</span>
+                    <span className="text-[10px] bg-amber-100 text-amber-950 font-mono font-bold px-1.5 py-0.5 rounded">
+                      KCSR 118A
+                    </span>
+                  </div>
+                  <div className="text-xl font-black font-mono-code text-amber-800">
+                    ₹{formatINR(quickEstimateResult.totalLeaveEncashment)}
+                  </div>
+                  <div className="text-[11px] text-stone-600 space-y-0.5">
+                    <div>ಗಳಿಕೆ ರಜೆ ({quickEstimateResult.earnedLeaveDays} ದಿನ): <strong className="font-mono">₹{formatINR(quickEstimateResult.leaveEncashmentAmount)}</strong></div>
+                    <div>ಅರೆವೇತನ ರಜೆ ({quickEstimateResult.halfPayLeaveDays} ದಿನ): <strong className="font-mono">₹{formatINR(quickEstimateResult.halfPayEncashmentAmount)}</strong></div>
+                    <div>ದೈನಿಕ ದರ: (ವೇತನ + DA) ÷ ೩೦ = <strong className="font-mono">₹{formatINR(Math.round(quickEstimateResult.monthlyEmoluments / 30))}</strong></div>
+                  </div>
+                </div>
+
+                {/* 4. Family Pension */}
+                <div className="bg-white p-4 rounded-xl border-2 border-stone-800 shadow-[3px_3px_0px_#2b2b2b] space-y-2">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-stone-200">
+                    <span className="font-bold text-xs text-stone-900 font-kannada">೪. ಕುಟುಂಬ ಪಿಂಚಣಿ (Family Pension)</span>
+                    <span className="text-[10px] bg-rose-100 text-rose-950 font-mono font-bold px-1.5 py-0.5 rounded">
+                      KCSR 294
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-sm font-bold text-stone-900 flex justify-between">
+                      <span>ಸಾಮಾನ್ಯ ದರ (30%):</span>
+                      <strong className="font-mono text-emerald-800 font-bold">₹{formatINR(quickEstimateResult.familyPensionNormal)}/ತಿಂಗಳು</strong>
+                    </div>
+                    <div className="text-sm font-bold text-stone-900 flex justify-between">
+                      <span>ಹೆಚ್ಚುವರಿ ದರ (50%):</span>
+                      <strong className="font-mono text-rose-800 font-bold">₹{formatINR(quickEstimateResult.familyPensionEnhanced)}/ತಿಂಗಳು</strong>
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-stone-500 pt-1 border-t border-stone-200">
+                    ಕನಿಷ್ಠ ಕುಟುಂಬ ಪಿಂಚಣಿ ₹೧೩,೫೦೦ ಖಾತರಿಯೊಂದಿಗೆ ಅನ್ವಯ.
+                  </div>
+                </div>
+              </div>
+
+              {/* STATUTORY RULES REFERENCE BANNER */}
+              <div className="bg-stone-100 p-4 rounded-xl border border-stone-300 text-xs text-stone-700 space-y-1">
+                <div className="font-bold text-stone-900 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                  <span>ಶಾಸನಬದ್ಧ ನಿಯಮಾವಳಿಗಳು & ಮಾರ್ಗಸೂಚಿಗಳು (Statutory Guidelines)</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
+                  <div className="bg-white p-2 rounded border border-stone-200">
+                    <span className="text-stone-500 block">ಅರ್ಹತಾ ಸೇವೆ:</span>
+                    <strong>{quickEstimateResult.completedHalfYears} ಅರ್ಧವರ್ಷಗಳು ({calcYearsOfService} ವರ್ಷ)</strong>
+                  </div>
+                  <div className="bg-white p-2 rounded border border-stone-200">
+                    <span className="text-stone-500 block">ಪೂರ್ಣ ಪಿಂಚಣಿ ಅರ್ಹತೆ:</span>
+                    <strong className={quickEstimateResult.isEligibleForFullPension ? 'text-emerald-700' : 'text-amber-800'}>
+                      {quickEstimateResult.isEligibleForFullPension ? '✓ ಪೂರ್ಣ ೫೦% ಅರ್ಹರು' : 'ಅನುಪಾತಿಕ ಪಿಂಚಣಿ'}
+                    </strong>
+                  </div>
+                  <div className="bg-white p-2 rounded border border-stone-200">
+                    <span className="text-stone-500 block">ವೇತನ ಆಯೋಗ:</span>
+                    <strong>೭ನೇ ರಾಜ್ಯ ವೇತನ ಆಯೋಗ (42.5% DA)</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* 10-YEAR RETIREMENT BENEFITS GROWTH TRENDLINE CHART (RECHARTS)            */}
+          {/* ========================================================================= */}
+          <div className="bg-white p-6 rounded-2xl border-2 border-stone-800 shadow-[4px_4px_0px_#2b2b2b] space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b-2 border-stone-800">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="bg-amber-400 text-stone-950 px-2 py-0.5 rounded text-[11px] font-black uppercase font-mono">
+                    RECHARTS TREND-LINE VISUALIZATION
+                  </span>
+                  <span className="text-stone-500 text-xs font-bold">
+                    ಮುಂದಿನ ೧೦ ವರ್ಷಗಳ ಪ್ರಕ್ಷೇಪಣ (10-Year Forecast)
+                  </span>
+                </div>
+                <h3 className="text-base font-black text-stone-900 font-kannada flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-amber-600" />
+                  <span>ಮುಂದಿನ ೧೦ ವರ್ಷಗಳ ನಿವೃತ್ತಿ ಸೌಲಭ್ಯಗಳ ಬೆಳವಣಿಗೆಯ ಪ್ರಕ್ಷೇಪಣ (10-Year Benefits Growth Trend)</span>
+                </h3>
+                <p className="text-xs text-stone-600 font-kannada">
+                  ಸ್ಥಿರ ವಾರ್ಷಿಕ ವೇತನ ಬಡ್ತಿ ಮತ್ತು ಹೆಚ್ಚುವರಿ ಅರ್ಹತಾ ಸೇವಾ ವರ್ಷಗಳ ಆಧಾರದ ಮೇಲೆ ಒಟ್ಟು ಇಡುಗಂಟು ಮತ್ತು ಮಾಸಿಕ ಪಿಂಚಣಿಯ ಏರಿಕೆಯ ಗ್ರಾಫ್.
+                </p>
+              </div>
+
+              {/* Annual Increment Rate Selector */}
+              <div className="bg-amber-50/80 p-2.5 rounded-xl border border-amber-200 flex flex-wrap items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-stone-800">
+                  <Percent className="w-4 h-4 text-amber-700" />
+                  <span>ವಾರ್ಷಿಕ ಬಡ್ತಿ ದರ:</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  {[2, 2.5, 3, 3.5, 4, 5].map(pct => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => setAnnualIncrementPercent(pct)}
+                      className={`px-2 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer border ${
+                        annualIncrementPercent === pct
+                          ? 'bg-amber-500 text-stone-950 border-stone-900 shadow-xs'
+                          : 'bg-white hover:bg-stone-100 text-stone-700 border-stone-300'
+                      }`}
+                    >
+                      {pct}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Recharts LineChart */}
+            <div className="w-full h-80 pt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={tenYearTrendData} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                  <XAxis 
+                    dataKey="yearLabel" 
+                    tick={{ fontSize: 11, fill: '#4b5563', fontWeight: 600 }}
+                  />
+                  <YAxis 
+                    yAxisId="left"
+                    tickFormatter={(val: number) => `₹${(val / 100000).toFixed(1)}L`}
+                    tick={{ fontSize: 11, fill: '#b45309', fontWeight: 600 }}
+                    label={{ value: 'ಒಟ್ಟು ಇಡುಗಂಟು (₹ ಲಕ್ಷಗಳಲ್ಲಿ)', angle: -90, position: 'insideLeft', fill: '#b45309', fontSize: 11, offset: 0 }}
+                  />
+                  <YAxis 
+                    yAxisId="right"
+                    orientation="right"
+                    tickFormatter={(val: number) => `₹${(val / 1000).toFixed(0)}k`}
+                    tick={{ fontSize: 11, fill: '#047857', fontWeight: 600 }}
+                    label={{ value: 'ಮಾಸಿಕ ಪಿಂಚಣಿ (₹ ಸಾವಿರಗಳಲ್ಲಿ)', angle: 90, position: 'insideRight', fill: '#047857', fontSize: 11, offset: 0 }}
+                  />
+                  <Tooltip 
+                    formatter={(value: any, name: any) => [
+                      `₹${formatINR(Number(value))}`, 
+                      name === 'terminalBenefits' ? 'ಒಟ್ಟು ನಿವೃತ್ತಿ ಇಡುಗಂಟು (Lump Sum)' : 'ಮಾಸಿಕ ನಿವ್ವಳ ಪಿಂಚಣಿ (Monthly Pension)'
+                    ]}
+                    labelFormatter={(label) => `ಅವಧಿ: ${label}`}
+                    contentStyle={{ backgroundColor: '#1c1917', color: '#ffffff', borderRadius: '12px', border: '1px solid #444', fontSize: '12px' }}
+                  />
+                  <Legend 
+                    verticalAlign="top" 
+                    height={36}
+                    formatter={(value) => (
+                      <span className="text-xs font-bold text-stone-800">
+                        {value === 'terminalBenefits' ? 'ಒಟ್ಟು ನಿವೃತ್ತಿ ಇಡುಗಂಟು (DCRG + Commutation + Leave)' : 'ಮಾಸಿಕ ನಿವ್ವಳ ಪಿಂಚಣಿ (Monthly Net Pension)'}
+                      </span>
+                    )}
+                  />
+                  <Line 
+                    yAxisId="left"
+                    type="monotone" 
+                    dataKey="terminalBenefits" 
+                    stroke="#d97706" 
+                    strokeWidth={3.5}
+                    dot={{ r: 4, fill: '#d97706', strokeWidth: 1, stroke: '#ffffff' }}
+                    activeDot={{ r: 7, stroke: '#b45309', strokeWidth: 2 }}
+                  />
+                  <Line 
+                    yAxisId="right"
+                    type="monotone" 
+                    dataKey="monthlyPension" 
+                    stroke="#059669" 
+                    strokeWidth={3.5}
+                    dot={{ r: 4, fill: '#059669', strokeWidth: 1, stroke: '#ffffff' }}
+                    activeDot={{ r: 7, stroke: '#047857', strokeWidth: 2 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Growth Milestones Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-stone-200">
+              <div className="bg-amber-50/70 p-3 rounded-xl border border-amber-200 space-y-1">
+                <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">
+                  ಪ್ರಸ್ತುತ ಮೌಲ್ಯ (Today):
+                </span>
+                <div className="text-base font-black text-stone-900 font-mono">
+                  ₹{formatINR(tenYearTrendData[0]?.terminalBenefits || 0)}
+                </div>
+                <div className="text-[11px] text-stone-600">
+                  ಮಾಸಿಕ ಪಿಂಚಣಿ: <strong className="font-mono text-emerald-800">₹{formatINR(tenYearTrendData[0]?.monthlyPension || 0)}</strong>
+                </div>
+              </div>
+
+              <div className="bg-amber-100/70 p-3 rounded-xl border border-amber-300 space-y-1">
+                <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block">
+                  ೫ ವರ್ಷಗಳ ನಂತರ (+5 Years):
+                </span>
+                <div className="text-base font-black text-amber-950 font-mono">
+                  ₹{formatINR(tenYearTrendData[5]?.terminalBenefits || 0)}
+                </div>
+                <div className="text-[11px] text-stone-700">
+                  ಮಾಸಿಕ ಪಿಂಚಣಿ: <strong className="font-mono text-emerald-800">₹{formatINR(tenYearTrendData[5]?.monthlyPension || 0)}</strong>
+                  <span className="ml-1 text-[10px] text-emerald-700 font-bold">
+                    (+{tenYearTrendData[0]?.terminalBenefits ? Math.round(((tenYearTrendData[5]?.terminalBenefits - tenYearTrendData[0]?.terminalBenefits) / tenYearTrendData[0]?.terminalBenefits) * 100) : 0}%)
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-stone-900 text-stone-100 p-3 rounded-xl border border-stone-800 space-y-1 shadow-sm">
+                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
+                  ೧೦ ವರ್ಷಗಳ ನಂತರ (+10 Years):
+                </span>
+                <div className="text-base font-black text-amber-300 font-mono">
+                  ₹{formatINR(tenYearTrendData[10]?.terminalBenefits || 0)}
+                </div>
+                <div className="text-[11px] text-stone-300">
+                  ಮಾಸಿಕ ಪಿಂಚಣಿ: <strong className="font-mono text-emerald-400">₹{formatINR(tenYearTrendData[10]?.monthlyPension || 0)}</strong>
+                  <span className="ml-1 text-[10px] text-amber-400 font-bold">
+                    (+{tenYearTrendData[0]?.terminalBenefits ? Math.round(((tenYearTrendData[10]?.terminalBenefits - tenYearTrendData[0]?.terminalBenefits) / tenYearTrendData[0]?.terminalBenefits) * 100) : 0}%)
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -2667,14 +3842,6 @@ export const PensionStudioView: React.FC<PensionStudioViewProps> = ({
           {/* Document Preview Card with A4 Paper Container (NO QR Code as per strict instruction) */}
           <div className="bg-stone-200/80 p-4 sm:p-8 rounded-xl border-2 border-stone-800 shadow-[4px_4px_0px_#2b2b2b] overflow-x-auto">
             <div className="max-w-[820px] mx-auto bg-white shadow-2xl rounded-sm p-4 sm:p-8 border border-stone-400 relative">
-              {/* Official Karnataka Government Docket Badge / Reference Header (No QR Code!) */}
-              <div className="absolute top-6 right-6 flex flex-col items-center bg-stone-50 p-2 border-2 border-stone-800 rounded shadow-sm text-center">
-                <div className="font-bold text-[9px] text-stone-900 font-mono-code">ಅಧಿಕೃತ ಮುದ್ರಿಕೆ</div>
-                <div className="text-[11px] font-mono-code font-bold text-stone-800">BEO / ಭದ್ರಾವತಿ</div>
-                <div className="text-[9px] text-stone-600 font-mono-code font-bold mt-0.5">KGID: {selectedCase.kgidNumber}</div>
-                <div className="text-[8px] bg-amber-200 text-stone-900 px-1 py-0.5 rounded font-mono-code font-bold mt-1">ಮೂಲ ದಾಖಲೆ</div>
-              </div>
-
               {/* Rendered HTML */}
               <div 
                 dangerouslySetInnerHTML={{ 
@@ -2918,6 +4085,55 @@ export const PensionStudioView: React.FC<PensionStudioViewProps> = ({
               <div className="text-[10px] text-stone-500 text-center italic">
                 ಕಡತಗಳ ಭಂಡಾರ (Record Room) • ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಾರ್ಯಾಲಯ ಭದ್ರಾವತಿ
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* ESTIMATE PRINT SLIP MODAL                                                 */}
+      {/* ========================================================================= */}
+      {showSlipModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+          <div className="bg-white rounded-2xl border-2 border-stone-800 shadow-[6px_6px_0px_#000] max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden">
+            <div className="p-4 bg-stone-900 text-white flex items-center justify-between border-b-2 border-stone-800">
+              <div className="flex items-center gap-2">
+                <Calculator className="w-5 h-5 text-amber-400" />
+                <h3 className="font-bold text-sm font-kannada">ನಿವೃತ್ತಿ ಸೌಲಭ್ಯಗಳ ಅಂದಾಜು ಲೆಕ್ಕಾಚಾರ ಪಟ್ಟಿ (Print Slip Preview)</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs rounded-lg flex items-center gap-1.5 cursor-pointer shadow-sm"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>ಮುದ್ರಿಸಿ (Print)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSlipModal(false)}
+                  className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-xs rounded-lg cursor-pointer"
+                >
+                  ಮುಚ್ಚಿ (Close)
+                </button>
+              </div>
+            </div>
+            <div className="p-6 overflow-y-auto bg-stone-100 flex-1">
+              <div 
+                className="bg-white shadow-lg p-4 rounded border border-stone-300"
+                dangerouslySetInnerHTML={{
+                  __html: generatePensionEstimateSlipHtml(
+                    quickEstimateResult,
+                    {
+                      name: calcEmployeeName,
+                      designation: calcDesignation,
+                      kgidNumber: calcKgid
+                    },
+                    DEFAULT_PENSION_OFFICE_CONFIG
+                  )
+                }}
+              />
             </div>
           </div>
         </div>

@@ -30,6 +30,7 @@ export interface DbEmployee {
   earnedLeaveBalance: number; // ಗಳಿಕೆ ರಜೆ ಶಿಲ್ಕು
   childCareLeaveQuota?: number; // ಶಿಶುಪಾಲನ ರಜೆ ಒಟ್ಟು ಕೋಟಾ (Default 180 days, editable)
   childCareLeaveAvailed: number; // ಶಿಶುಪಾಲನ ರಜೆ ತೆಗೆದುಕೊಂಡ ದಿನಗಳು
+  isDdo?: boolean; // ಡಿಡಿಓ ಅಧಿಕಾರ ಹೊಂದಿರುವರೇ
   ddoCode: string;
   placeOfWork: string;
   hometown: string;
@@ -356,7 +357,7 @@ export function formatOfficialLetterNumber(options: {
   } else if (/ವಾರ್ಷಿಕ|annual.*increment/i.test(text) || /AI/i.test(custom)) {
     subCategory = 'ವಾ.ವೇ.ಬ';
   } else if (/ಗಳಿಕೆ|earned.*leave/i.test(text) || /EL/i.test(custom) || /ಗ\.ರ/i.test(custom)) {
-    subCategory = 'ಗ.ರ.ಆ.ಮಂ';
+    subCategory = 'ಗ.ರಜೆ.ಮಂ';
   } else if (/ಶಿಶುಪಾಲನ|child.*care/i.test(text) || /CCL/i.test(custom)) {
     subCategory = 'ಶಿ.ಪಾ.ರ.ಮಂ';
   } else if (/ಅರ್ಧ.*ವೇತನ|half.*pay/i.test(text)) {
@@ -2095,7 +2096,6 @@ class RelationalDatabase {
     // DDO Signatory Resolution:
     // Dynamically pull DDO officer information from employee where isDdo === true
     const ddoEmp = this.data.employees.find(e => (e as any).isDdo === true);
-    const office = this.getOfficeConfig();
     const resolvedSignatoryName = ddoEmp?.fullName || (orderData as any).signatoryName || office.ddoOfficerName || office.officerName || 'ಹೆಚ್. ರವಿಕುಮಾರ್';
     const resolvedSignatoryDesignation = ddoEmp?.designation || (orderData as any).signatoryDesignation || office.ddoDesignation || office.officerDesignation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ';
     const resolvedSignatoryOffice = ddoEmp?.placeOfWork || ddoEmp?.officeLocation || (orderData as any).signatoryOffice || office.ddoOfficeName || office.officeName || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ ತಾಲ್ಲೂಕು';

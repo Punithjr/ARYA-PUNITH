@@ -77,6 +77,8 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
   const [status, setStatus] = useState<EmployeeStatus>('Active');
   const [role, setRole] = useState<EmployeeRole>('Section Officer');
   const [joiningDate, setJoiningDate] = useState(new Date().toISOString().split('T')[0]);
+  const [dob, setDob] = useState('');
+  const [appointmentDate, setAppointmentDate] = useState('');
   const [qualifications, setQualifications] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -124,6 +126,8 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
       setStatus(initialEmployee.status);
       setRole(initialEmployee.role);
       setJoiningDate(initialEmployee.joiningDate || new Date().toISOString().split('T')[0]);
+      setDob(initialEmployee.dob || '');
+      setAppointmentDate(initialEmployee.appointmentDate || '');
       setQualifications(initialEmployee.qualifications || '');
       setNotes(initialEmployee.notes || '');
 
@@ -171,6 +175,8 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
       setStatus('Active');
       setRole('Faculty / Principal');
       setJoiningDate(new Date().toISOString().split('T')[0]);
+      setDob('');
+      setAppointmentDate('');
       setQualifications('B.Ed. / D.Ed.');
       setNotes('');
 
@@ -212,6 +218,47 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
     setCustomFields(prev => prev.filter(item => item.id !== id));
   };
 
+  // Calculated Age based on Date of Birth
+  const calculatedAge = React.useMemo(() => {
+    if (!dob) return null;
+    const birth = new Date(dob);
+    if (isNaN(birth.getTime())) return null;
+    const now = new Date();
+    let years = now.getFullYear() - birth.getFullYear();
+    const m = now.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) {
+      years--;
+    }
+    return years >= 0 ? years : null;
+  }, [dob]);
+
+  // Projected Karnataka 60 Years Superannuation Retirement Date (KCSR 95)
+  const retirementDate = React.useMemo(() => {
+    if (!dob) return '';
+    const birth = new Date(dob);
+    if (isNaN(birth.getTime())) return '';
+    const retYear = birth.getFullYear() + 60;
+    const retMonth = birth.getMonth();
+    const lastDayOfMonth = new Date(retYear, retMonth + 1, 0).getDate();
+    const mm = String(retMonth + 1).padStart(2, '0');
+    const dd = String(lastDayOfMonth).padStart(2, '0');
+    return `${retYear}-${mm}-${dd}`;
+  }, [dob]);
+
+  // Years of Service Served
+  const yearsServed = React.useMemo(() => {
+    if (!joiningDate) return null;
+    const join = new Date(joiningDate);
+    if (isNaN(join.getTime())) return null;
+    const now = new Date();
+    let yrs = now.getFullYear() - join.getFullYear();
+    const m = now.getMonth() - join.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < join.getDate())) {
+      yrs--;
+    }
+    return yrs >= 0 ? yrs : 0;
+  }, [joiningDate]);
+
   if (!isOpen) return null;
 
   const handleGenerateCode = () => {
@@ -247,6 +294,9 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
           status,
           role,
           joiningDate,
+          dob: dob ? dob.trim() : undefined,
+          age: calculatedAge !== null ? calculatedAge : undefined,
+          appointmentDate: appointmentDate ? appointmentDate.trim() : undefined,
           qualifications: qualifications.trim(),
           notes: notes.trim(),
           kgidNumber: kgidNumber.trim(),
@@ -399,41 +449,6 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
             </div>
           </div>
 
-          {/* Row 3: Section & Role */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Departmental Wing / Section *
-              </label>
-              <select
-                id="select-emp-section"
-                value={section}
-                onChange={(e) => setSection(e.target.value as DepartmentSection)}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
-              >
-                {SECTIONS.map((sec) => (
-                  <option key={sec} value={sec}>{sec}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Establishment Role Category *
-              </label>
-              <select
-                id="select-emp-role"
-                value={role}
-                onChange={(e) => setRole(e.target.value as EmployeeRole)}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
-              >
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
           {/* Row 4: Office Posting Location & Employment Type */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -467,6 +482,76 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          {/* CRITICAL SERVICE & BIRTH DATES (ಜನ್ಮ ದಿನಾಂಕ & ಸೇವೆಗೆ ಸೇರಿದ ದಿನಾಂಕ) */}
+          <div className="p-3.5 bg-sky-50/80 rounded-xl border-2 border-sky-300 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-sky-200 pb-2">
+              <span className="text-xs font-bold text-sky-950 font-kannada flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-sky-700" />
+                <span>ಪ್ರಮುಖ ದಿನಾಂಕಗಳು: ಜನ್ಮ ದಿನಾಂಕ (DOB) ಮತ್ತು ಸೇವೆಗೆ ಸೇರಿದ ದಿನಾಂಕ (DOJ)</span>
+              </span>
+              <span className="text-[10px] text-sky-800 font-mono font-bold uppercase">
+                SERVICE & RETIREMENT DATES
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Field 1: Date of Birth */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label htmlFor="input-emp-dob" className="block text-xs font-bold text-stone-800 font-kannada">
+                    ಜನ್ಮ ದಿನಾಂಕ (Date of Birth - DOB) *
+                  </label>
+                  {calculatedAge !== null && (
+                    <span className="px-1.5 py-0.2 rounded bg-sky-200 text-sky-950 font-bold font-mono text-[10px]">
+                      ವಯಸ್ಸು: {calculatedAge} ವರ್ಷ
+                    </span>
+                  )}
+                </div>
+                <input
+                  id="input-emp-dob"
+                  type="date"
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-sky-300 bg-white font-mono focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-600 shadow-xs"
+                />
+                {retirementDate ? (
+                  <p className="text-[10px] text-stone-600 mt-1 font-kannada">
+                    ೬೦ ವರ್ಷಗಳ ನಿವೃತ್ತಿ ದಿನಾಂಕ (KCSR 95): <strong className="font-mono text-sky-900">{retirementDate}</strong>
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-stone-500 mt-1 font-kannada">
+                    ವಯಸ್ಸು ಮತ್ತು ನಿವೃತ್ತಿ ದಿನಾಂಕವನ್ನು ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಲೆಕ್ಕಹಾಕಲಾಗುತ್ತದೆ.
+                  </p>
+                )}
+              </div>
+
+              {/* Field 2: Date of Joining */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label htmlFor="input-emp-joining" className="block text-xs font-bold text-stone-800 font-kannada">
+                    ಸೇವೆಗೆ ಸೇರಿದ ದಿನಾಂಕ (Date of Joining - DOJ) *
+                  </label>
+                  {yearsServed !== null && (
+                    <span className="px-1.5 py-0.2 rounded bg-emerald-200 text-emerald-950 font-bold font-mono text-[10px]">
+                      {yearsServed} ವರ್ಷಗಳ ಸೇವೆ
+                    </span>
+                  )}
+                </div>
+                <input
+                  id="input-emp-joining"
+                  type="date"
+                  required
+                  value={joiningDate}
+                  onChange={(e) => setJoiningDate(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-sky-300 bg-white font-mono focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-600 shadow-xs"
+                />
+                <p className="text-[10px] text-stone-600 mt-1 font-kannada">
+                  ಸರ್ಕಾರಿ ಸೇವೆಗೆ ಕರ್ತವ್ಯ ವರದಿ ಮಾಡಿಕೊಂಡ ದಿನಾಂಕ (ವೇತನ ಬಡ್ತಿ & ಪಿಂಚಣಿಗೆ ಪರಿಗಣನೆ).
+                </p>
+              </div>
             </div>
           </div>
 
@@ -546,8 +631,12 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
                   onChange={(e) => {
                     const g = e.target.value as 'Female' | 'Male' | 'Other';
                     setGender(g);
-                    if (g === 'Female' && (!childCareLeaveQuota || childCareLeaveQuota === 0)) {
-                      setChildCareLeaveQuota(180);
+                    if (g === 'Female') {
+                      if (!childCareLeaveQuota || childCareLeaveQuota === 0) {
+                        setChildCareLeaveQuota(180);
+                      }
+                    } else {
+                      setChildCareLeaveQuota(0);
                     }
                   }}
                   className="w-full px-2.5 py-1.5 text-xs bg-white rounded-lg border border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500/40 font-medium"
@@ -558,22 +647,31 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
                 </select>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold text-stone-700 mb-1 flex items-center justify-between">
-                  <span>ಶಿಶುಪಾಲನ ರಜೆ ಒಟ್ಟು ಕೋಟಾ (ದಿನಗಳು) *</span>
-                  <span className="text-[10px] text-pink-700 font-normal">ಡೀಫಾಲ್ಟ್: 180 ದಿನಗಳು</span>
-                </label>
-                <input
-                  id="input-emp-childcare-quota"
-                  type="number"
-                  min={0}
-                  max={730}
-                  value={childCareLeaveQuota}
-                  onChange={(e) => setChildCareLeaveQuota(Number(e.target.value))}
-                  placeholder="180"
-                  className="w-full px-2.5 py-1.5 text-xs bg-white rounded-lg border border-pink-300 focus:outline-none focus:ring-2 focus:ring-pink-500/40 font-mono font-bold text-pink-900"
-                />
-              </div>
+              {gender === 'Female' ? (
+                <div>
+                  <label className="block text-[11px] font-semibold text-stone-700 mb-1 flex items-center justify-between">
+                    <span>ಶಿಶುಪಾಲನ ರಜೆ ಒಟ್ಟು ಕೋಟಾ (ದಿನಗಳು) *</span>
+                    <span className="text-[10px] text-pink-700 font-bold bg-pink-50 px-1.5 py-0.5 rounded border border-pink-200">ಮಹಿಳಾ ಕೋಟಾ: 180 ದಿನಗಳು</span>
+                  </label>
+                  <input
+                    id="input-emp-childcare-quota"
+                    type="number"
+                    min={0}
+                    max={730}
+                    value={childCareLeaveQuota}
+                    onChange={(e) => setChildCareLeaveQuota(Number(e.target.value))}
+                    placeholder="180"
+                    className="w-full px-2.5 py-1.5 text-xs bg-white rounded-lg border border-pink-300 focus:outline-none focus:ring-2 focus:ring-pink-500/40 font-mono font-bold text-pink-900"
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col justify-end">
+                  <div className="p-2 bg-stone-100 rounded-lg border border-stone-200 text-[11px] text-stone-600 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-stone-400"></span>
+                    <span>ಶಿಶುಪಾಲನ ರಜೆ: <strong>ಕೇವಲ ಮಹಿಳಾ ನೌಕರರಿಗೆ ಮಾತ್ರ ಅನ್ವಯ (Female Only)</strong></span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* LEAVE BALANCES (ಗಳಿಕೆ ರಜೆ EL & ಅರ್ಧ ವೇತನ ರಜೆ HPL ಶಿಲ್ಕು) */}
@@ -868,11 +966,11 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
             )}
           </div>
 
-          {/* Row 5: Email, Phone & Date of Joining */}
+          {/* Row 5: Email, Phone & Appointment Order Date */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Official Email
+                Official Email (ಇಮೇಲ್)
               </label>
               <input
                 id="input-emp-email"
@@ -886,28 +984,28 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Phone Number
+                Phone Number (ದೂರವಾಣಿ)
               </label>
               <input
                 id="input-emp-phone"
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="+1 (555) 000-0000"
+                placeholder="+91 94480 00000"
                 className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Date of Joining
+                ಮೂಲ ನೇಮಕಾತಿ ಆದೇಶ ದಿನಾಂಕ (Appointment Date)
               </label>
               <input
-                id="input-emp-joining"
+                id="input-emp-appointment-date"
                 type="date"
-                value={joiningDate}
-                onChange={(e) => setJoiningDate(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                value={appointmentDate}
+                onChange={(e) => setAppointmentDate(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 font-mono"
               />
             </div>
           </div>

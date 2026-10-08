@@ -1,253 +1,93 @@
 @import "tailwindcss";
 
-:root {
-  --bg: #fffbf2;
-  --ink: #2b2b2b;
-  --accent: #f59e0b;
-  --ink-faint: #e5e7eb;
-  --secondary: #10b981;
-}
-
-body {
-  background-color: var(--bg);
-  color: var(--ink);
-  font-family: 'Inter', 'Noto Sans Kannada', sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
-
-/* Design Variation Typography */
-.font-gaegu {
-  font-family: 'Gaegu', cursive;
-}
-
-.font-mono-code {
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.font-kannada {
-  font-family: 'Noto Sans Kannada', 'Inter', sans-serif;
-}
-
-/* Warm Playful Brutalist UI Tokens */
-.card-brutal {
-  background: #ffffff;
-  border: 2.5px solid var(--ink);
-  box-shadow: 6px 6px 0px var(--ink);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.card-brutal:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: 8px 8px 0px var(--ink);
-}
-
-.card-brutal-static {
-  background: #ffffff;
-  border: 2.5px solid var(--ink);
-  box-shadow: 6px 6px 0px var(--ink);
-}
-
-.card-brutal-sm {
-  background: #ffffff;
-  border: 2px solid var(--ink);
-  box-shadow: 4px 4px 0px var(--ink);
-}
-
-.card-brutal-emerald {
-  background: #ffffff;
-  border: 2.5px solid var(--ink);
-  box-shadow: 6px 6px 0px var(--secondary);
-}
-
-.card-brutal-accent {
-  background: #ffffff;
-  border: 2.5px solid var(--ink);
-  box-shadow: 6px 6px 0px var(--accent);
-}
-
-.ink-pill {
-  background: var(--ink);
-  color: var(--bg);
-  border: 2px solid var(--ink);
-  font-family: 'JetBrains Mono', monospace;
-  padding: 0.5rem 1.25rem;
-  border-radius: 9999px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.ink-pill:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: 4px 4px 0px var(--accent);
-}
-
-.label-ink {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1rem;
-  background: var(--ink);
-  color: var(--bg);
-  padding: 0.2rem 0.6rem;
-  width: fit-content;
-  font-weight: 700;
-  display: inline-block;
-  border-radius: 4px;
-}
-
-.label-accent {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1rem;
-  background: var(--accent);
-  color: var(--ink);
-  padding: 0.2rem 0.6rem;
-  width: fit-content;
-  font-weight: 800;
-  display: inline-block;
-  border-radius: 4px;
-}
-
-.label-emerald {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1rem;
-  background: var(--secondary);
-  color: #ffffff;
-  padding: 0.2rem 0.6rem;
-  width: fit-content;
-  font-weight: 800;
-  display: inline-block;
-  border-radius: 4px;
-}
-
-.notice-sticky {
-  background: #ffffff;
-  border: 2.5px dashed var(--ink);
-  padding: 1.5rem;
-  transform: rotate(1.5deg);
-  box-shadow: 4px 4px 0px rgba(43, 43, 43, 0.12);
-  border-radius: 12px;
-}
-
-.squiggle-bg {
-  position: absolute;
-  width: 180px;
-  height: 180px;
-  background: radial-gradient(var(--accent) 15%, transparent 16%);
-  background-size: 16px 16px;
-  z-index: 0;
-  opacity: 0.25;
-  pointer-events: none;
-}
-
-@media print {
-  @page {
-    size: A4 portrait;
-    margin: 12mm 15mm 12mm 15mm;
-  }
-
-  /* Hide all UI navigation and buttons during print */
-  nav,
-  header,
-  #stats-overview-bar,
-  #batch-action-bar,
-  #app-toast-alert,
-  button,
-  .no-print {
-    display: none !important;
+@layer base {
+  :root {
+    --color-primary: #2563eb;
+    --color-primary-hover: #1d4ed8;
   }
 
   body {
-    background: #ffffff !important;
-    color: #000000 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    font-size: 12pt !important;
-    line-height: 1.5 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   }
+}
 
-  #root {
-    padding: 0 !important;
-    margin: 0 !important;
-    max-width: 100% !important;
-    width: 100% !important;
-  }
+/* Custom animations & utility classes */
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
 
-  main {
-    padding: 0 !important;
-    margin: 0 !important;
-    max-width: 100% !important;
-    width: 100% !important;
-  }
+.animate-pulse-slow {
+  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
 
-  /* Make all official letter & memorandum print containers strictly fit A4 page with 12pt font */
-  #general-letter-paper,
-  #official-letter-paper,
-  #memorandum-order-paper,
-  #printable-letter-document,
-  #printable-audit-report,
-  #form-28-print-container,
-  #office-order-print-container,
-  #a4-print-preview-modal-sheet,
-  .memorandum-doc,
-  .official-letter-paper,
-  .printable-document,
-  .fit-paper-a4 {
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin: 0 auto !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    background: #ffffff !important;
-    font-size: 12pt !important;
-    line-height: 1.5 !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
+/* Scanning corner handles */
+.corner-handle {
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background-color: #3b82f6;
+  border: 3px solid #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  position: absolute;
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  touch-action: none;
+  z-index: 20;
+  transition: transform 0.1s ease;
+}
 
-  /* When Print Preview Modal is active, hide everything behind the overlay */
-  body.print-preview-modal-active #root > *:not(#a4-print-preview-overlay),
-  body.print-preview-modal-active #root > div:not(#a4-print-preview-overlay) {
-    display: none !important;
-  }
+.corner-handle:active {
+  transform: translate(-50%, -50%) scale(1.25);
+  cursor: grabbing;
+  background-color: #1d4ed8;
+}
 
-  #a4-print-preview-overlay {
-    position: static !important;
-    background: transparent !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    inset: auto !important;
-    display: block !important;
-  }
+/* Dark mode smooth transition */
+html.dark {
+  color-scheme: dark;
+}
 
-  /* Table styling for print */
-  table {
-    width: 100% !important;
-    border-collapse: collapse !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    font-size: 10pt !important;
-  }
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
 
-  tr, td, th {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-  textarea, input {
-    border: none !important;
-    outline: none !important;
-    overflow: visible !important;
-    height: auto !important;
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.4);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.7);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(75, 85, 99, 0.6);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.8);
+}
+
+/* Priority Overdue Flashing / Pulsing Subtle Red Border */
+@keyframes overduePulseBorder {
+  0%, 100% {
+    border-color: rgba(239, 68, 68, 0.95);
+    box-shadow: 0 0 0 1.5px rgba(239, 68, 68, 0.5), 0 0 14px rgba(239, 68, 68, 0.25);
   }
+  50% {
+    border-color: rgba(248, 113, 113, 0.4);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15), 0 0 4px rgba(239, 68, 68, 0.1);
+  }
+}
+
+.animate-overdue-pulse {
+  animation: overduePulseBorder 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 

@@ -57,10 +57,9 @@ export interface Prapathra28EmployeeRow {
   selected: boolean;
 }
 
-// Convert English numerals to Kannada numerals for official documents
+// Maintain standard English digits (0-9) as requested across the website
 export function toKannadaDigits(num: number | string): string {
-  const kannadaDigits = ['೦', '೧', '೨', '೩', '೪', '೫', '೬', '೭', '೮', '೯'];
-  return String(num).replace(/[0-9]/g, (w) => kannadaDigits[+w]);
+  return String(num);
 }
 
 // Build Prapathra 28 rows from a list of employees for a selected cycle (January or July)
@@ -132,4 +131,133 @@ export function exportPrapathra28ToExcel(
   const ws = XLSX.utils.json_to_sheet(excelData);
   XLSX.utils.book_append_sheet(wb, ws, `ಪ್ರಪತ್ರ-28_${monthNameKn}_${year}`);
   XLSX.writeFile(wb, `Prapathra_28_Form28_${month}_${year}_BEO_Bhadravathi.xlsx`);
+}
+
+// ==================== ANNUAL SALARY GRANT DEMAND TYPES & CALCULATIONS ====================
+export interface SalaryGrantDemandRow {
+  slNo: number;
+  id: string;
+  fullName: string;
+  designation: string;
+  kgidNumber: string;
+  placeOfWork: string;
+  payScale: string;
+  incrementMonth: 'January' | 'July';
+  currentBasicPay: number;
+  stage1Pay: number;
+  stage2Pay?: number;
+  period1Months: number;
+  period1Rate: number;
+  period2Months: number;
+  period2Rate: number;
+  annualBasicPay: number;
+  annualDa: number;
+  annualHra: number;
+  annualMedical: number;
+  annualGrossDemand: number;
+  formulaDesc: string;
+}
+
+// Prepare 12-month Financial Year Salary Grant Demand (ಮುಂದಿನ ವರ್ಷದ ವೇತನ ಅನುದಾನ ಬೇಡಿಕೆ ಅಂದಾಜು)
+// Jan increment: First increment applied, then March-Dec (9 months) at stage1 + next Jan-March (3 months) at stage2
+// July increment: March-June (3 months) at current basic + July-March (9 months) at July increment stage1
+export function prepareSalaryGrantDemandData(
+  employees: Employee[],
+  daPercentage: number = 50,
+  hraPercentage: number = 8
+): SalaryGrantDemandRow[] {
+  return employees.map((emp, idx) => {
+    const incMonth: 'January' | 'July' = emp.incrementMonth === 'January' ? 'January' : 'July';
+    const p0 = emp.basicPay || 37900;
+    const stage1 = getNextPayStage(p0).nextPay;
+
+    let stage2: number | undefined;
+    let period1Months = 0;
+    let period1Rate = 0;
+    let period2Months = 0;
+    let period2Rate = 0;
+    let formulaDesc = '';
+
+    if (incMonth === 'January') {
+      // First increment applied to current pay -> stage1
+      // March to December (9 months) at stage1
+      // Next Jan to March (3 months) at stage2
+      stage2 = getNextPayStage(stage1).nextPay;
+      period1Months = 9;
+      period1Rate = stage1;
+      period2Months = 3;
+      period2Rate = stage2;
+      formulaDesc = `(₹${stage1.toLocaleString('en-IN')} × ೯ ತಿಂಗಳು) + (₹${stage2.toLocaleString('en-IN')} × ೩ ತಿಂಗಳು)`;
+    } else {
+      // July increment:
+      // March to June (3 months) at P0 (current basic)
+      // July to March (9 months) at stage1 (July increment)
+      period1Months = 3;
+      period1Rate = p0;
+      period2Months = 9;
+      period2Rate = stage1;
+      formulaDesc = `(₹${p0.toLocaleString('en-IN')} × ೩ ತಿಂಗಳು) + (₹${stage1.toLocaleString('en-IN')} × ೯ ತಿಂಗಳು)`;
+    }
+
+    const annualBasic = (period1Rate * period1Months) + (period2Rate * period2Months);
+    const annualDa = Math.round(annualBasic * (daPercentage / 100));
+    const annualHra = Math.round(annualBasic * (hraPercentage / 100));
+    const annualMedical = 2400; // ₹200 * 12 months
+    const annualGross = annualBasic + annualDa + annualHra + annualMedical;
+
+    return {
+      slNo: idx + 1,
+      id: emp.id,
+      fullName: emp.fullName,
+      designation: emp.designation,
+      kgidNumber: emp.kgidNumber || emp.employeeCode || `BHD-${1000 + idx}`,
+      placeOfWork: emp.placeOfWork || emp.officeLocation || 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ',
+      payScale: emp.payScale || '37900-70850',
+      incrementMonth: incMonth,
+      currentBasicPay: p0,
+      stage1Pay: stage1,
+      stage2Pay: stage2,
+      period1Months,
+      period1Rate,
+      period2Months,
+      period2Rate,
+      annualBasicPay: annualBasic,
+      annualDa,
+      annualHra,
+      annualMedical,
+      annualGrossDemand: annualGross,
+      formulaDesc
+    };
+  });
+}
+
+// Export Annual Salary Grant Demand to Excel (.xlsx)
+export function exportGrantDemandToExcel(
+  rows: SalaryGrantDemandRow[],
+  financialYear: string = '2026-2027'
+) {
+  const wb = XLSX.utils.book_new();
+
+  const excelData = rows.map((r, i) => ({
+    'ಕ್ರ.ಸಂ. (Sl No)': i + 1,
+    'ನೌಕರರ ಹೆಸರು (Name)': r.fullName,
+    'ಕೆ.ಜಿ.ಐ.ಡಿ ಸಂಖ್ಯೆ (KGID No)': r.kgidNumber,
+    'ಹುದ್ದೆ (Designation)': r.designation,
+    'ಶಾಲೆ / ಕಛೇರಿ (Office / School)': r.placeOfWork,
+    'ವೇತನ ಶ್ರೇಣಿ (Pay Scale)': r.payScale,
+    'ಬಡ್ತಿ ತಿಂಗಳು (Increment Month)': r.incrementMonth === 'January' ? 'ಜನವರಿ (Jan)' : 'ಜುಲೈ (July)',
+    'ಹಾಲಿ ಮೂಲ ವೇತನ ₹': r.currentBasicPay,
+    'ಮೊದಲ ಬಡ್ತಿ ವೇತನ ₹': r.stage1Pay,
+    'ಮುಂದಿನ ಜನವರಿ ಬಡ್ತಿ ವೇತನ ₹': r.stage2Pay || '—',
+    '೧೨ ತಿಂಗಳ ಲೆಕ್ಕಾಚಾರ ಸೂತ್ರ': r.formulaDesc,
+    'ವಾರ್ಷಿಕ ಮೂಲ ವೇತನ ಬೇಡಿಕೆ ₹ (Basic)': r.annualBasicPay,
+    'ವಾರ್ಷಿಕ ತುಟ್ಟಿಭತ್ಯೆ ₹ (DA)': r.annualDa,
+    'ವಾರ್ಷಿಕ ಮನೆ ಬಾಡಿಗೆ ಭತ್ಯೆ ₹ (HRA)': r.annualHra,
+    'ವಾರ್ಷಿಕ ವೈದ್ಯಕೀಯ ಭತ್ಯೆ ₹ (Med)': r.annualMedical,
+    'ಒಟ್ಟು ವಾರ್ಷಿಕ ಅನುದಾನ ಬೇಡಿಕೆ ₹ (Gross Demand)': r.annualGrossDemand
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(excelData);
+  XLSX.utils.book_append_sheet(wb, ws, `ವೇತನ_ಅನುದಾನ_${financialYear}`);
+  XLSX.writeFile(wb, `Salary_Grant_Demand_Budget_Estimate_${financialYear}_BEO_Bhadravathi.xlsx`);
 }

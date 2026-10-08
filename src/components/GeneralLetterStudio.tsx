@@ -25,9 +25,12 @@ import {
   HelpCircle,
   FileCode,
   Users,
+  FolderGit2,
+  FolderPlus,
 } from 'lucide-react';
-import { GeneratedOfficeLetter, GeneralLetterCategory, GeneralLetterFormData, Employee } from '../types';
+import { GeneratedOfficeLetter, GeneralLetterCategory, GeneralLetterFormData, Employee, MasterDocketFile } from '../types';
 import { PrintPreviewModal } from './PrintPreviewModal';
+import { formatDateDDMMYYYY } from '../utils/formatDate';
 
 interface GeneralLetterStudioProps {
   currentUser?: { displayName: string; role: string } | null;
@@ -35,6 +38,8 @@ interface GeneralLetterStudioProps {
   prefilledEmployee?: Employee | null;
   onSaveToRegistry?: (letterData: any) => Promise<void>;
   prefilledLetter?: any;
+  files?: MasterDocketFile[];
+  onCreateDocketFile?: (fileData: Partial<MasterDocketFile>) => Promise<void>;
 }
 
 export const GeneralLetterStudio: React.FC<GeneralLetterStudioProps> = ({
@@ -43,6 +48,8 @@ export const GeneralLetterStudio: React.FC<GeneralLetterStudioProps> = ({
   prefilledEmployee,
   onSaveToRegistry,
   prefilledLetter,
+  files = [],
+  onCreateDocketFile,
 }) => {
   // Category selection: strictly 'employee' (ನೌಕರರ ಸಾಮಾನ್ಯ ಪತ್ರ) or 'other' (ಇತರೆ ಸಾಮಾನ್ಯ ಪತ್ರ)
   const [category, setCategory] = useState<GeneralLetterCategory>('employee');

@@ -1,3 +1,4 @@
+import http from 'http';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -128,6 +129,10 @@ export interface FileMovementRecord {
   sentDate: string;
   remarks: string;
   statusAfterMove: string;
+  initiatingOfficer?: string;
+  transferTimestamp?: string;
+  fromSection?: string;
+  toSection?: string;
 }
 
 export interface MasterDocketFile {
@@ -137,7 +142,7 @@ export interface MasterDocketFile {
   section: string;
   fileCategory?: string;
   initiatedDate: string;
-  status: 'Active / Open' | 'Under Scrutiny' | 'Pending Higher Approval' | 'Disposed / Closed';
+  status: 'Active / Open' | 'Under Scrutiny' | 'Pending Higher Approval' | 'Disposed / Closed' | 'Withdrawn' | 'In-Transit' | 'Under Review' | string;
   currentCustodian: string;
   priority: 'Immediate' | 'Urgent' | 'Routine' | 'Normal';
   linkedLetterIds: string[];
@@ -149,6 +154,8 @@ export interface MasterDocketFile {
   sectionCode?: string;
   sectionName?: string;
   lettersCount?: number;
+  dueDate?: string;
+  lastMovedDate?: string;
 }
 
 export interface ServiceSanctionRecord {
@@ -207,6 +214,7 @@ export interface Employee {
   earnedLeaveBalance?: number;
   childCareLeaveQuota?: number;
   childCareLeaveAvailed?: number;
+  isDdo?: boolean;
   qualifications?: string;
   otherServiceDetails?: string;
   notes?: string;
@@ -554,6 +562,8 @@ let sampleDocketFiles: MasterDocketFile[] = [
     sectionName: 'ಸ.ಪ್ರಾ.ಶಿ',
     fileCategory: 'ವೇತನ & ಭತ್ಯೆ ಕಡತ (Salary & Increments)',
     initiatedDate: '2026-09-01',
+    dueDate: '2026-10-25',
+    lastMovedDate: '2026-10-03T02:30:00.000Z',
     status: 'Active / Open',
     currentCustodian: 'ಕಛೇರಿ ಅಧೀಕ್ಷಕರು / ಸಿಬ್ಬಂದಿ ಶಾಖೆ',
     priority: 'Urgent',
@@ -564,7 +574,7 @@ let sampleDocketFiles: MasterDocketFile[] = [
         id: 'mov-45-1',
         fromOfficer: 'ಪ್ರಥಮ ದರ್ಜೆ ಸಹಾಯಕರು (FDA - ಸಿಬ್ಬಂದಿ)',
         toOfficer: 'ಕಛೇರಿ ಅಧೀಕ್ಷಕರು (OS)',
-        sentDate: '2026-09-02',
+        sentDate: '2026-10-03',
         remarks: 'ಜನವರಿ ಮತ್ತು ಜುಲೈ ಮಾಹೆಯ ವಾರ್ಷಿಕ ವೇತನ ಬಡ್ತಿ ಪ್ರಪತ್ರ-೨೮ ರಂತೆ ಕಡತ ಸಂಖ್ಯೆ ೪೫ ರಲ್ಲಿ ಪತ್ರಗಳನ್ನು ಸೃಜಿಸಿ ಅನುಮೋದಿಸಲಾಗಿದೆ.',
         statusAfterMove: 'Active / Open'
       }
@@ -579,9 +589,11 @@ let sampleDocketFiles: MasterDocketFile[] = [
     section: 'Legal & Grievances',
     fileCategory: 'ಮಾಹಿತಿ ಹಕ್ಕು ಕಡತ (RTI & Legal)',
     initiatedDate: '2026-08-20',
+    dueDate: '2026-09-19',
+    lastMovedDate: '2026-10-02T19:00:00.000Z',
     status: 'Active / Open',
     currentCustodian: 'ಸಾರ್ವಜನಿಕ ಮಾಹಿತಿ ಅಧಿಕಾರಿ ಹಾಗೂ ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು, ಭದ್ರಾವತಿ',
-    priority: 'Urgent',
+    priority: 'Immediate',
     linkedLetterIds: ['let-104'],
     isRtiFile: true,
     movementHistory: [
@@ -948,6 +960,96 @@ let sampleDocketFiles: MasterDocketFile[] = [
     ],
     notes: 'ಶಿಸ್ತು ಕ್ರಮ ಮತ್ತು ವಿಚಾರಣಾ ಕಡತ - ಪ್ರಾಥಮಿಕ ಶಿಕ್ಷಣ ವಿಭಾಗ.',
     attachments: []
+  },
+  {
+    id: 'file-comp-2026',
+    fileNumber: 'FILE-2026/COMP-09',
+    subject: 'ಶಿಕ್ಷಕರ ಗಳಿಕೆ ರಜೆ ನಗದೀಕರಣ ಹಾಗೂ ಸೇವಾ ಪುಸ್ತಕ ದಾಖಲಾತಿ ಅಂತಿಮ ವಿಲೇವಾರಿ ಕಡತ',
+    section: 'Administration & Services',
+    sectionCode: 'ಆ2',
+    sectionName: 'ಸ.ಪ್ರಾ.ಶಿ',
+    fileCategory: 'ರಜೆ & ಸೇವಾ ಕಡತ (Leave & Service Records)',
+    initiatedDate: new Date().toISOString().split('T')[0],
+    status: 'Disposed / Closed',
+    currentCustodian: 'ಕಛೇರಿ ಅಧೀಕ್ಷಕರು (ರೆಕಾರ್ಡ್ ರೂಮ್)',
+    priority: 'Routine',
+    linkedLetterIds: [],
+    lettersCount: 1,
+    movementHistory: [
+      {
+        id: 'mov-comp-1',
+        fromOfficer: 'ಸಹಾಯಕ ನಿರ್ದೇಶಕರು (AAO)',
+        toOfficer: 'ಕಛೇರಿ ಅಧೀಕ್ಷಕರು (OS)',
+        sentDate: new Date().toISOString().split('T')[0],
+        remarks: 'ಆದೇಶ ಜಾರಿಯಾಗಿದೆ, ಕಡತವನ್ನು ವಿಲೇವಾರಿ ಮಾಡಿ ಮುಕ್ತಾಯಗೊಳಿಸಲಾಗಿದೆ.',
+        statusAfterMove: 'Disposed / Closed'
+      }
+    ],
+    notes: 'ಯಶಸ್ವಿಯಾಗಿ ವಿಲೇವಾರಿಯಾದ ಕಡತ (Completed Docket).',
+    attachments: []
+  },
+  {
+    id: 'file-withdrawn-2026',
+    fileNumber: 'FILE-2026/WDR-03',
+    subject: 'ಶಾಲಾ ಕಟ್ಟಡ ಹೆಚ್ಚುವರಿ ಅನುದಾನ ಕೋರಿಕೆ ಕಡತ (ಅರ್ಜಿದಾರರಿಂದ ಹಿಂಪಡೆಯಲಾಗಿದೆ)',
+    section: 'Accounts & Grants',
+    sectionCode: 'ಆ2',
+    sectionName: 'ಸ.ಪ್ರಾ.ಶಿ',
+    fileCategory: 'ಅನುದಾನ ಕಡತ (Withdrawn Request)',
+    initiatedDate: new Date().toISOString().split('T')[0],
+    status: 'Withdrawn' as any,
+    currentCustodian: 'ಕಡತ ಶಾಖೆ',
+    priority: 'Routine',
+    linkedLetterIds: [],
+    lettersCount: 0,
+    movementHistory: [],
+    notes: 'ಶಾಲಾ ಮುಖ್ಯಸ್ಥರ ಕೋರಿಕೆ ಮೇರೆಗೆ ಹಿಂಪಡೆಯಲಾದ ಕಡತ (Withdrawn Docket).',
+    attachments: []
+  },
+  {
+    id: 'file-transit-2026',
+    fileNumber: 'FILE-2026/TRN-11',
+    subject: 'ತಾಲ್ಲೂಕು ಶಾಲಾ ಕೊಠಡಿ ದುರಸ್ತಿ ಅನುದಾನ ಪ್ರಸ್ತಾವನೆ ಕಡತ (ಉನ್ನತಾಧಿಕಾರಿಗಳ ಅನುಮೋದನೆಗೆ ರವಾನೆ)',
+    section: 'Accounts & Grants',
+    sectionCode: 'ಆ2',
+    sectionName: 'ಸ.ಪ್ರಾ.ಶಿ',
+    fileCategory: 'ಲೆಕ್ಕಪತ್ರ & ಅನುದಾನ ಕಡತ (Accounts & Grants)',
+    initiatedDate: new Date().toISOString().split('T')[0],
+    status: 'In-Transit',
+    currentCustodian: 'ಉಪನಿರ್ದೇಶಕರು (DDPI), ಶಿವಮೊಗ್ಗ',
+    priority: 'Urgent',
+    linkedLetterIds: [],
+    lettersCount: 1,
+    movementHistory: [
+      {
+        id: 'mov-trn-1',
+        fromOfficer: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು, ಭದ್ರಾವತಿ',
+        toOfficer: 'ಉಪನಿರ್ದೇಶಕರು (DDPI)',
+        sentDate: new Date().toISOString().split('T')[0],
+        remarks: 'ಅನುದಾನ ಮಂಜೂರಾತಿಗಾಗಿ ಜಿಲ್ಲಾ ಹಂತಕ್ಕೆ ರವಾನಿಸಲಾಗಿದೆ (In-Transit).',
+        statusAfterMove: 'In-Transit'
+      }
+    ],
+    notes: 'ಪ್ರಸ್ತುತ ರವಾನೆಯಲ್ಲಿರುವ ಕಡತ (In-Transit Docket).',
+    attachments: []
+  },
+  {
+    id: 'file-review-2026',
+    fileNumber: 'FILE-2026/REV-18',
+    subject: 'ಪ್ರಾಥಮಿಕ ಶಾಲಾ ಶಿಕ್ಷಕರ ಹಿರಿಯ ಶ್ರೇಣಿ / ಆಯ್ಕೆ ಶ್ರೇಣಿ ವೇತನ ಬಡ್ತಿ ಪರಿಶೀಲನಾ ಕಡತ',
+    section: 'Administration & Services',
+    sectionCode: 'ಆ2',
+    sectionName: 'ಸ.ಪ್ರಾ.ಶಿ',
+    fileCategory: 'ವೇತನ ಬಡ್ತಿ & ಪರಿಷ್ಕರಣೆ ಕಡತ (Promotion & Pay Revision)',
+    initiatedDate: new Date().toISOString().split('T')[0],
+    status: 'Under Review',
+    currentCustodian: 'ಕಛೇರಿ ಅಧೀಕ್ಷಕರು / ಪರಿಶೀಲನಾ ವಿಭಾಗ',
+    priority: 'Immediate',
+    linkedLetterIds: [],
+    lettersCount: 2,
+    movementHistory: [],
+    notes: 'ಸಿಬ್ಬಂದಿ ಶಾಖೆಯ ಪರಿಶೀಲನೆಯಲ್ಲಿರುವ ಕಡತ (Under Review Docket).',
+    attachments: []
   }
 ];
 
@@ -958,19 +1060,20 @@ let sampleEmployees: Employee[] = [
     kgidNumber: '100101',
     basicPay: 93250,
     payScale: '74400-1900-82000-2100-90400-2400-97600-2700-108400',
-    fullName: 'ಬಿ.ಕೆ. ನಾರಯಣಪ್ಪ (B.K. Narayanappa)',
-    designation: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು (Block Education Officer - BEO)',
+    fullName: 'ಹೆಚ್. ರವಿಕುಮಾರ್ (H. Ravikumar)',
+    designation: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು & ಡಿಡಿಓ (Block Education Officer & DDO)',
+    isDdo: true,
     section: 'Administration & Services',
     officeLocation: 'ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಬಿ.ಹೆಚ್. ರಸ್ತೆ, ಹಳೇನಗರ, ಭದ್ರಾವತಿ (BEO Office, Bhadravathi)',
     email: 'beo.bhadravathi@karnataka.gov.in',
-    phone: '+91 94489 91201',
+    phone: '+91 94480 12345',
     employmentType: 'Permanent',
     status: 'Active',
     role: 'Director / HOD',
     joiningDate: '2004-08-10',
     incrementMonth: 'July',
     qualifications: 'M.A., M.Ed., KES (ಕರ್ನಾಟಕ ಶಿಕ್ಷಣ ಸೇವೆ)',
-    notes: 'ಸಕ್ಷಮ ಪ್ರಾಧಿಕಾರ ಹಾಗೂ ಸಾರ್ವಜನಿಕ ಮಾಹಿತಿ ಅಧಿಕಾರಿ (PIO). ಭದ್ರಾವತಿ ಶೈಕ್ಷಣಿಕ ವಲಯದ ಮುಖ್ಯಸ್ಥರು.',
+    notes: 'ಸಕ್ಷಮ ಪ್ರಾಧಿಕಾರ ಹಾಗೂ ಸಾರ್ವಜನಿಕ ಮಾಹಿತಿ ಅಧಿಕಾರಿ (PIO) & ಆಹರಣ ಮತ್ತು ವಿತರಣಾಧಿಕಾರಿ (DDO).',
     lastUpdated: '2026-08-01',
   },
   {
@@ -1974,6 +2077,123 @@ app.post('/api/files/:id/move', (req, res) => {
   if (newStatus) file.status = newStatus;
 
   res.json({ file, movement: movementRecord });
+});
+
+// 9a. Bulk Status Update for multiple dockets
+app.post('/api/files/bulk-status', (req, res) => {
+  const { fileIds, newStatus, remarks } = req.body;
+  if (!Array.isArray(fileIds) || !newStatus) {
+    return res.status(400).json({ error: 'fileIds array and newStatus are required' });
+  }
+
+  const updatedFiles: MasterDocketFile[] = [];
+  const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+
+  for (const id of fileIds) {
+    const file = docketFiles.find(f => f.id === id);
+    if (file) {
+      file.status = newStatus;
+      const movementRecord: FileMovementRecord = {
+        id: `mov-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        fromOfficer: file.currentCustodian,
+        toOfficer: file.currentCustodian,
+        sentDate: nowStr,
+        remarks: remarks || `Bulk status updated to '${newStatus}' by Administrator`,
+        statusAfterMove: newStatus,
+      };
+      if (!file.movementHistory) file.movementHistory = [];
+      file.movementHistory.push(movementRecord);
+      updatedFiles.push(file);
+    }
+  }
+
+  res.json({ files: updatedFiles, updatedCount: updatedFiles.length });
+});
+
+// 9b. Section Transfer with audit trail (Movement History with timestamp & initiating officer)
+app.post('/api/files/:id/transfer-section', (req, res) => {
+  const file = docketFiles.find(f => f.id === req.params.id);
+  if (!file) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+
+  const { toSection, transferNote, initiatingOfficer, toOfficer } = req.body;
+  if (!toSection) {
+    return res.status(400).json({ error: 'Target section is required' });
+  }
+  if (!transferNote || !transferNote.trim()) {
+    return res.status(400).json({ error: 'Mandatory transfer note is required' });
+  }
+
+  const prevSection = file.section;
+  file.section = toSection;
+
+  if (toSection === 'Administration & Services') {
+    file.sectionCode = 'ಆ2';
+    file.sectionName = 'ಸ.ಪ್ರಾ.ಶಿ';
+  } else if (toSection === 'Academic Wing') {
+    file.sectionCode = 'ಆ1';
+    file.sectionName = 'ಪ್ರೌಢ ಶಿಕ್ಷಣ';
+  } else if (toSection === 'Accounts & Grants') {
+    file.sectionCode = 'ಆ3';
+    file.sectionName = 'ಅನುದಾನಿತ & ಲೆಕ್ಕಪತ್ರ';
+  }
+
+  const nowIso = new Date().toISOString();
+  const initOfficer = initiatingOfficer || file.currentCustodian || 'ಅಧಿಕಾರಿಗಳು';
+  const targetOfficer = toOfficer || `${toSection} ಶಾಖಾಧಿಕಾರಿಗಳು`;
+
+  const movementRecord: FileMovementRecord = {
+    id: `mov-${Date.now()}`,
+    fromOfficer: initOfficer,
+    toOfficer: targetOfficer,
+    sentDate: nowIso.replace('T', ' ').substring(0, 16),
+    remarks: `[ವಿಭಾಗ ವರ್ಗಾವಣೆ: ${prevSection} ➔ ${toSection}] ಷರಾ: ${transferNote.trim()}`,
+    statusAfterMove: 'In-Transit',
+    initiatingOfficer: initOfficer,
+    transferTimestamp: nowIso,
+  };
+
+  file.movementHistory.push(movementRecord);
+  file.currentCustodian = targetOfficer;
+  file.status = 'In-Transit';
+  file.lastMovedDate = nowIso;
+
+  res.json({ message: 'ವಿಭಾಗ ವರ್ಗಾವಣೆ ಯಶಸ್ವಿಯಾಗಿದೆ (Section transferred)', file, movement: movementRecord });
+});
+
+// 9c. Bulk Status Update for multiple dockets
+app.post('/api/files/bulk-status', (req, res) => {
+  const { fileIds, status, remarks, officer } = req.body;
+  if (!Array.isArray(fileIds) || fileIds.length === 0) {
+    return res.status(400).json({ error: 'fileIds array is required' });
+  }
+  if (!status) {
+    return res.status(400).json({ error: 'status is required' });
+  }
+
+  const updatedFiles: any[] = [];
+  const nowIso = new Date().toISOString();
+
+  fileIds.forEach((id: string) => {
+    const file = docketFiles.find(f => f.id === id);
+    if (file) {
+      file.status = status;
+      file.lastMovedDate = nowIso;
+      const movRecord = {
+        id: `mov-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        fromOfficer: officer || file.currentCustodian,
+        toOfficer: officer || file.currentCustodian,
+        sentDate: nowIso.replace('T', ' ').substring(0, 16),
+        remarks: remarks || `[ಬೃಹತ್ ಸ್ಥಿತಿ ಬದಲಾವಣೆ / Bulk Status Update] ${status}`,
+        statusAfterMove: status,
+      };
+      file.movementHistory.push(movRecord);
+      updatedFiles.push(file);
+    }
+  });
+
+  res.json({ message: `${updatedFiles.length} ಕಡತಗಳ ಸ್ಥಿತಿಯನ್ನು ನವೀಕರಿಸಲಾಗಿದೆ`, updatedFiles, files: docketFiles });
 });
 
 // ==================== EMPLOYEE / ESTABLISHMENT DATA ROUTES ====================
@@ -3391,6 +3611,24 @@ app.get('/api/memorandum/dashboard-stats', (req, res) => {
   }
 });
 
+app.get('/api/memorandum/dashboard-summary', (req, res) => {
+  try {
+    const stats = db.getDashboardStats();
+    res.json({
+      summary: {
+        totalOrders: stats.totalOrdersGenerated,
+        totalEmployees: stats.totalEmployees,
+        ordersByType: stats.orderTypeCounts || {},
+        financialImpactMonthly: stats.totalSalaryChanges ? stats.totalSalaryChanges * 1250 : 0,
+        recentOrders: stats.recentOrders || [],
+        recentAuditLogs: stats.recentAuditLogs || []
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to fetch dashboard summary' });
+  }
+});
+
 // 2. Order Types
 app.get('/api/memorandum/order-types', (req, res) => {
   try {
@@ -3991,7 +4229,7 @@ app.post('/api/letter-maker/generate-letter', async (req, res) => {
     const todayDate = customDate || new Date().toISOString().split('T')[0];
     const academicYear = '2026-27';
     let subCode = 'ಸಾ.ಪ';
-    if (/ಗಳಿಕೆ|ರಜೆ/i.test(typeStr)) subCode = 'ಗ.ರ.ಆ.ಮಂ';
+    if (/ಗಳಿಕೆ|ರಜೆ/i.test(typeStr)) subCode = 'ಗ.ರಜೆ.ಮಂ';
     else if (/ಕಾಲಮಿತಿ|10.*ವರ್ಷ/i.test(typeStr)) subCode = '10.ವ.ಕಾ.ಮಿ';
     else if (/ವಾರ್ಷಿಕ|ವೇತನ.*ಬಡ್ತಿ/i.test(typeStr)) subCode = 'ವಾ.ವೇ.ಬ';
     else if (/ಆದೇಶ|office.*order/i.test(typeStr)) subCode = 'ಕ.ಆ';
@@ -4303,11 +4541,9 @@ CRITICAL RULES:
    ಬಿ.ಹೆಚ್. ರಸ್ತೆ, ಹಳೇನಗರ, ಭದ್ರಾವತಿ, ಶಿವಮೊಗ್ಗ ಜಿಲ್ಲೆ - 577301
    Do NOT include any English text. Do NOT include any officer name like "ರವೀಂದ್ರನಾಥ್". Do NOT duplicate the office name.
 3. SIGNATORY:
-   The signatory is strictly:
-   (ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳು)
-   ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ, ಭದ್ರಾವತಿ
+   Do NOT include "ತಮ್ಮ ನಂಬುಗೆಯ," or officer signatures inside bodyHtml or bodyText. The system renders the official single signature block automatically.
 4. KANNADA TERMINOLOGY:
-   Use standard official terminology: "ಮಾನ್ಯರೇ,", "ಮೇಲ್ಕಂಡ ವಿಷಯ ಹಾಗೂ ಉಲ್ಲೇಖಕ್ಕೆ ಸಂಬಂಧಿಸಿದಂತೆ...", "ತಮ್ಮ ನಂಬುಗೆಯ,".
+   Use standard official terminology: "ಮಾನ್ಯರೇ,", "ಮೇಲ್ಕಂಡ ವಿಷಯ ಹಾಗೂ ಉಲ್ಲೇಖಕ್ಕೆ ಸಂಬಂಧಿಸಿದಂತೆ...".
 
 Return ONLY a strict JSON object with fields:
 {
@@ -4335,6 +4571,16 @@ Return ONLY a strict JSON object with fields:
           const jsonMatch = raw.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
             generatedData = JSON.parse(jsonMatch[0]);
+            if (generatedData?.bodyHtml) {
+              generatedData.bodyHtml = generatedData.bodyHtml
+                .replace(/<p[^>]*>\s*ತಮ್ಮ\s*(ನಂಬುಗೆಯ|ವಿಶ್ವಾಸಿ)[\s\S]*$/gi, '')
+                .trim();
+            }
+            if (generatedData?.bodyText) {
+              generatedData.bodyText = generatedData.bodyText
+                .replace(/ತಮ್ಮ\s*(ನಂಬುಗೆಯ|ವಿಶ್ವಾಸಿ)[\s\S]*$/gi, '')
+                .trim();
+            }
           }
         }
       } catch (geminiErr: any) {
@@ -4678,9 +4924,15 @@ app.post('/api/schools/reset', (req, res) => {
 
 // ==================== VITE MIDDLEWARE SETUP ====================
 async function startServer() {
+  const httpServer = http.createServer(app);
+
   if (process.env.NODE_ENV !== 'production') {
+    const isHmrDisabled = process.env.DISABLE_HMR === 'true';
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: isHmrDisabled ? false : { server: httpServer },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -4692,7 +4944,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`Education Department Letters & Files Server running on http://0.0.0.0:${PORT}`);
   });
 }

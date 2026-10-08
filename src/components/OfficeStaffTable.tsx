@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Employee } from '../types';
 import { CSV_STAFF_MEMBERS } from '../data/csvEmployeesData';
+import { YearsOfServiceBadge } from './EmployeeRosterView';
 
 export const SEED_OFFICE_STAFF: Employee[] = [
   {
@@ -418,6 +419,9 @@ export const OfficeStaffTable: React.FC<OfficeStaffTableProps> = ({
                             <span className="px-1.5 py-0.2 rounded bg-amber-200 text-amber-950 text-[10px] font-bold border border-amber-400">
                               ಸಕ್ಷಮ ಪ್ರಾಧಿಕಾರ / ಮುಖ್ಯಸ್ಥರು
                             </span>
+                          )}
+                          {staff.joiningDate && (
+                            <YearsOfServiceBadge joiningDate={staff.joiningDate} size="sm" showKannada={true} />
                           )}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 text-[11px] text-stone-500">

@@ -23,7 +23,11 @@ import {
   Archive,
   Layers,
   School,
-  Calendar
+  Calendar,
+  Camera,
+  Minimize2,
+  RefreshCw,
+  Sliders
 } from 'lucide-react';
 import { DakRegisterSummary, AdminAuthUser, AppNavTab } from '../types';
 export type { AppNavTab };
@@ -176,6 +180,56 @@ export const DeptHeader: React.FC<DeptHeaderProps> = ({
             </button>
 
             <button
+              id="btn-quick-pdf-scanner"
+              onClick={() => setActiveTab('pdfScanner')}
+              className="hidden sm:inline-flex px-3 py-1.5 text-xs font-bold text-white bg-emerald-800 hover:bg-emerald-700 rounded-lg transition-all items-center gap-1.5 border-2 border-[#2b2b2b] shadow-[3px_3px_0px_#10b981] hover:shadow-[4px_4px_0px_#10b981] hover:-translate-x-0.5 hover:-translate-y-0.5 cursor-pointer font-kannada"
+              title="ಕಾಗದ ದಾಖಲೆ ಸ್ಕ್ಯಾನರ್ (Office PDF Document Scanner & Compressor)"
+            >
+              <Camera className="w-3.5 h-3.5 text-emerald-300" />
+              <span>📸 PDF ಸ್ಕ್ಯಾನರ್</span>
+            </button>
+
+            <button
+              id="btn-quick-pdf-compressor"
+              onClick={() => setActiveTab('pdfCompressor')}
+              className="hidden md:inline-flex px-3 py-1.5 text-xs font-bold text-white bg-purple-900 hover:bg-purple-800 rounded-lg transition-all items-center gap-1.5 border-2 border-[#2b2b2b] shadow-[3px_3px_0px_#c084fc] hover:shadow-[4px_4px_0px_#c084fc] hover:-translate-x-0.5 hover:-translate-y-0.5 cursor-pointer font-kannada"
+              title="PDF ಗಾತ್ರ ಕಡಿತ (<200KB / <500KB) (PDF Compressor)"
+            >
+              <Minimize2 className="w-3.5 h-3.5 text-purple-300" />
+              <span>📉 PDF ಕಂಪ್ರೆಸ್</span>
+            </button>
+
+            <button
+              id="btn-quick-pdf-merger"
+              onClick={() => setActiveTab('pdfMerger')}
+              className="hidden lg:inline-flex px-3 py-1.5 text-xs font-bold text-white bg-teal-900 hover:bg-teal-800 rounded-lg transition-all items-center gap-1.5 border-2 border-[#2b2b2b] shadow-[3px_3px_0px_#2dd4bf] hover:shadow-[4px_4px_0px_#2dd4bf] hover:-translate-x-0.5 hover:-translate-y-0.5 cursor-pointer font-kannada"
+              title="ಹಲವು PDF ಹಾಗೂ ಚಿತ್ರಗಳನ್ನು ಒಂದೇ ಕಡತಕ್ಕೆ ವಿಲೀನಗೊಳಿಸಿ (PDF Merger & Consolidation)"
+            >
+              <Layers className="w-3.5 h-3.5 text-teal-300" />
+              <span>📑 PDF ವಿಲೀನ</span>
+            </button>
+
+            <button
+              id="btn-quick-jpg-converter"
+              onClick={() => setActiveTab('jpgConverter')}
+              className="hidden lg:inline-flex px-3 py-1.5 text-xs font-bold text-stone-950 bg-amber-300 hover:bg-amber-200 rounded-lg transition-all items-center gap-1.5 border-2 border-[#2b2b2b] shadow-[3px_3px_0px_#2b2b2b] hover:shadow-[4px_4px_0px_#2b2b2b] hover:-translate-x-0.5 hover:-translate-y-0.5 cursor-pointer font-kannada"
+              title="PDF ನಿಂದ JPG, JPG ನಿಂದ PDF & ಚಿತ್ರಗಳನ್ನು JPG ಗೆ ಪರಿವರ್ತಿಸಿ (PDF & JPG Converter)"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-stone-950" />
+              <span>🔄 PDF & ಜೆಪಿ ಕನ್ವರ್ಟ್</span>
+            </button>
+
+            <button
+              id="btn-quick-image-compressor"
+              onClick={() => setActiveTab('imageCompressor')}
+              className="hidden xl:inline-flex px-3 py-1.5 text-xs font-bold text-rose-950 bg-rose-200 hover:bg-rose-300 rounded-lg transition-all items-center gap-1.5 border-2 border-[#2b2b2b] shadow-[3px_3px_0px_#2b2b2b] hover:shadow-[4px_4px_0px_#2b2b2b] hover:-translate-x-0.5 hover:-translate-y-0.5 cursor-pointer font-kannada"
+              title="ಚಿತ್ರಗಳನ್ನು 20KB, 50KB, 100KB ಗೆ ಕಂಪ್ರೆಸ್ ಮಾಡಿ (JPG Compressor to Target Size)"
+            >
+              <Sliders className="w-3.5 h-3.5 text-rose-900" />
+              <span>⚡ ಜೆಪಿಸಿ ಕಂಪ್ರೆಸ್</span>
+            </button>
+
+            <button
               id="btn-quick-master-audit"
               onClick={() => onOpenMasterAudit ? onOpenMasterAudit() : setActiveTab('masterAudit')}
               className="hidden lg:inline-flex px-3 py-1.5 text-xs font-bold text-amber-950 bg-amber-200 hover:bg-amber-300 rounded-lg transition-all items-center gap-1.5 border-2 border-[#2b2b2b] shadow-[3px_3px_0px_#2b2b2b] hover:-translate-x-0.5 hover:-translate-y-0.5 cursor-pointer font-kannada"
@@ -278,6 +332,21 @@ export const DeptHeader: React.FC<DeptHeaderProps> = ({
             >
               <FolderGit2 className="w-3.5 h-3.5 text-[#f59e0b]" />
               <span>📁 ಕಡತಗಳ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್</span>
+            </button>
+
+            {/* ಮಾನವ ಸಂಪನ್ಮೂಲ ನಿರ್ವಹಣಾ ವ್ಯವಸ್ಥೆ (HRMS 2.0 / Human Resource Management System) */}
+            <button
+              id="nav-tab-hrms"
+              onClick={() => setActiveTab('hrms')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'hrms'
+                  ? 'bg-[#047857] text-white shadow-[3px_3px_0px_#2b2b2b] -translate-y-0.5'
+                  : 'bg-emerald-50 text-emerald-950 hover:bg-emerald-100 shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+              title="ಮಾನವ ಸಂಪನ್ಮೂಲ ನಿರ್ವಹಣಾ ವ್ಯವಸ್ಥೆ (HRMS 2.0 - Khajane-2, Service Book, Transfers, LPC, APAR & Pay Bill)"
+            >
+              <UserCheck className="w-3.5 h-3.5 text-emerald-700" />
+              <span>👥 HRMS (ಮಾನವ ಸಂಪನ್ಮೂಲ)</span>
             </button>
 
             {/* 1. ಸಾಮಾನ್ಯ ಪತ್ರ ತಯಾರಿಸಿ */}
@@ -498,6 +567,81 @@ export const DeptHeader: React.FC<DeptHeaderProps> = ({
             >
               <FileCheck2 className="w-3.5 h-3.5 text-[#2b2b2b]" />
               <span>೧೧. ಮಾಹಿತಿ ಹಕ್ಕು (RTI)</span>
+            </button>
+
+            {/* 12. PDF ದಾಖಲೆ ಸ್ಕ್ಯಾನರ್ (PDF Document Scanner) */}
+            <button
+              id="nav-tab-pdf-scanner"
+              onClick={() => setActiveTab('pdfScanner')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'pdfScanner'
+                  ? 'bg-[#10b981] text-white shadow-[3px_3px_0px_#2b2b2b] -translate-y-0.5'
+                  : 'bg-emerald-50 text-emerald-950 hover:bg-emerald-100 shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+              title="ಕಛೇರಿ ಕಾಗದ ದಾಖಲೆಗಳನ್ನು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ, ಮೂಲೆ ಸರಿಪಡಿಸಿ, PDF ಸೃಜಿಸಿ (Office Document Scanner)"
+            >
+              <Camera className="w-3.5 h-3.5 text-emerald-700" />
+              <span>೧೨. PDF ಸ್ಕ್ಯಾನರ್</span>
+            </button>
+
+            {/* 13. PDF ಕಂಪ್ರೆಸ್ (PDF Compressor) */}
+            <button
+              id="nav-tab-pdf-compressor"
+              onClick={() => setActiveTab('pdfCompressor')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'pdfCompressor'
+                  ? 'bg-purple-900 text-white shadow-[3px_3px_0px_#c084fc] -translate-y-0.5'
+                  : 'bg-purple-50 text-purple-950 hover:bg-purple-100 shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+              title="PDF ಫೈಲ್ ಗಾತ್ರ ಕುಗ್ಗಿಸಿ (<200KB / <500KB) (PDF Compressor)"
+            >
+              <Minimize2 className="w-3.5 h-3.5 text-purple-600" />
+              <span>೧೩. PDF ಕಂಪ್ರೆಸ್</span>
+            </button>
+
+            {/* 14. PDF ವಿಲೀನ (PDF Merger) */}
+            <button
+              id="nav-tab-pdf-merger"
+              onClick={() => setActiveTab('pdfMerger')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'pdfMerger'
+                  ? 'bg-teal-900 text-white shadow-[3px_3px_0px_#2dd4bf] -translate-y-0.5'
+                  : 'bg-teal-50 text-teal-950 hover:bg-teal-100 shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+              title="ಹಲವಾರು PDF ಮತ್ತು ಚಿತ್ರಗಳನ್ನು ಒಂದೇ ಕಡತಕ್ಕೆ ವಿಲೀನಗೊಳಿಸಿ (PDF Merger)"
+            >
+              <Layers className="w-3.5 h-3.5 text-teal-600" />
+              <span>೧೪. PDF ವಿಲೀನ</span>
+            </button>
+
+            {/* 15. JPEG ➔ JPG & PDF ಕನ್ವರ್ಟರ್ (PDF & JPG Converter) */}
+            <button
+              id="nav-tab-jpg-converter"
+              onClick={() => setActiveTab('jpgConverter')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'jpgConverter'
+                  ? 'bg-[#2b2b2b] text-[#f59e0b] shadow-[3px_3px_0px_#f59e0b] -translate-y-0.5'
+                  : 'bg-amber-50 text-amber-950 hover:bg-amber-100 shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+              title="PDF ನಿಂದ JPG, JPG ನಿಂದ PDF & ಚಿತ್ರಗಳನ್ನು JPG ಗೆ ಪರಿವರ್ತಿಸಿ (PDF & JPG Converter)"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-amber-600" />
+              <span>೧೫. PDF & ಜೆಪಿ ಕನ್ವರ್ಟ್</span>
+            </button>
+
+            {/* 16. ಇಮೇಜ್ ಕಂಪ್ರೆಸರ್ (Image Compressor 20KB/50KB/100KB) */}
+            <button
+              id="nav-tab-image-compressor"
+              onClick={() => setActiveTab('imageCompressor')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer border-2 border-[#2b2b2b] ${
+                activeTab === 'imageCompressor'
+                  ? 'bg-blue-900 text-white shadow-[3px_3px_0px_#38bdf8] -translate-y-0.5'
+                  : 'bg-blue-50 text-blue-950 hover:bg-blue-100 shadow-[2px_2px_0px_#2b2b2b]'
+              }`}
+              title="ಭಾವಚಿತ್ರ & ಸಹಿ ಫೈಲ್ ಗಾತ್ರ ಕುಗ್ಗಿಸಿ (೨೦KB / ೫೦KB / ೧೦೦KB) (Photo & Signature Compressor)"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" />
+              <span>೧೬. ಜೆಪಿಸಿ ಕಂಪ್ರೆಸ್</span>
             </button>
           </div>
 

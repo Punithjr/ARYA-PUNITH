@@ -2,18 +2,78 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ಪತ್ರ ನಿರ್ವಹಣೆ</title>
-    <meta name="description" content="ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ ಪತ್ರ ವ್ಯವಹಾರಗಳು, ಮಾಹಿತಿ ಹಕ್ಕು, ನೌಕರರ ಜ್ಞಾಪನಾ ಆದೇಶ (Memorandum Orders), ವೇತನ ಬಡ್ತಿ ಮತ್ತು ಕಡತ ನಿರ್ವಹಣೆ ತಂತ್ರಾಂಶ." />
-    <meta property="og:title" content="ಪತ್ರ ನಿರ್ವಹಣೆ" />
-    <meta property="og:description" content="ಕ್ಷೇತ್ರ ಶಿಕ್ಷಣಾಧಿಕಾರಿಗಳ ಕಛೇರಿ ಪತ್ರ ವ್ಯವಹಾರಗಳು, ಮಾಹಿತಿ ಹಕ್ಕು, ನೌಕರರ ಜ್ಞಾಪನಾ ಆದೇಶ (Memorandum Orders), ವೇತನ ಬಡ್ತಿ ಮತ್ತು ಕಡತ ನಿರ್ವಹಣೆ ತಂತ್ರಾಂಶ." />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    <title>JPEG to JPG converter online free – 100% Private In-Browser Converter</title>
+    <meta name="description" content="Free, 100% private in-browser file tools: Compress JPG/PNG to target size (20KB, 50KB, 100KB), convert JPEG/WebP to JPG, compress PDF, and scan documents with phone camera. Everything runs in your browser — files never leave your device." />
+    <meta name="keywords" content="compress jpg to 50kb online, image compressor, jpeg to jpg converter, pdf compressor, free pdf scanner, private file tools, client side compression" />
+    
+    <!-- PWA & Mobile Web App Meta -->
+    <meta name="theme-color" content="#2563eb" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="FileTools" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- OpenGraph Social Cards -->
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="FileTools" />
+    <meta property="og:title" content="FileTools – 100% Free & Private In-Browser File Tools" />
+    <meta property="og:description" content="Compress JPG to 20KB/50KB/100KB, convert to JPG, compress PDF, and scan documents with your camera. 100% client-side privacy, works offline." />
+    <meta property="og:image" content="/icon.svg" />
+
+    <!-- Twitter / X Card -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="FileTools – 100% Free & Private In-Browser File Tools" />
+    <meta name="twitter:description" content="Compress JPG to 20KB/50KB/100KB, convert to JPG, compress PDF, and scan documents with your camera. 100% client-side privacy, works offline." />
+    <meta name="twitter:image" content="/icon.svg" />
+
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+Kannada:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <!-- Schema.org WebApplication JSON-LD -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "FileTools",
+      "applicationCategory": "UtilitiesApplication",
+      "operatingSystem": "All",
+      "description": "Free, 100% private in-browser file tools: Compress JPG/PNG to target size (20KB, 50KB, 100KB), convert JPEG to JPG, compress PDF, and scan documents. 100% client-side with offline PWA support.",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "featureList": [
+        "Image Compressor with 20KB/50KB/100KB and custom target KB binary search",
+        "JPEG to JPG batch converter",
+        "PDF Compressor with Low/Medium/High and target size optimization",
+        "Document Scanner with camera capture, auto edge detection, perspective correction, filters & PDF export",
+        "100% client-side privacy - no file uploads",
+        "Offline PWA capability"
+      ]
+    }
+    </script>
+    <script>
+      // Gracefully handle benign HMR/WebSocket disconnect events in sandbox/iframe environment
+      window.addEventListener('unhandledrejection', function(event) {
+        if (event && event.reason && String(event.reason).includes('WebSocket')) {
+          event.preventDefault();
+        }
+      });
+      window.addEventListener('error', function(event) {
+        if (event && (event.message?.includes('WebSocket') || event.filename?.includes('@vite/client'))) {
+          event.preventDefault();
+        }
+      });
+    </script>
   </head>
-  <body>
+  <body class="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased transition-colors duration-200">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

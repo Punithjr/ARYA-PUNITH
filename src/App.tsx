@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { EducationLetter, MasterDocketFile, DakRegisterSummary, ActionNote, Employee, AdminAuthUser, DocumentAttachment, SchoolInstitution, OfficeSection } from './types';
+import { EducationLetter, MasterDocketFile, DakRegisterSummary, ActionNote, Employee, AdminAuthUser, DocumentAttachment, SchoolInstitution, OfficeSection, DepartmentSection } from './types';
 import { DeptHeader, AppNavTab } from './components/DeptHeader';
 import { LettersRegistry } from './components/LettersRegistry';
 import { FilesDocketsView } from './components/FilesDocketsView';
@@ -25,10 +25,16 @@ import { SchoolManagementView } from './components/SchoolManagementView';
 import { HomeDashboard, DEFAULT_OFFICE_SECTIONS } from './components/HomeDashboard';
 import { Prapathra28Studio } from './components/Prapathra28Studio';
 import { StatutoryCircularStudio } from './components/StatutoryCircularStudio';
+import { PdfScannerView } from './components/PdfScannerView';
+import { JpgConverterView } from './components/JpgConverterView';
+import { ImageCompressorView } from './components/ImageCompressorView';
+import { PdfCompressorView } from './components/PdfCompressorView';
+import { PdfMergerView } from './components/PdfMergerView';
 import { MasterDocketAuditModal } from './components/MasterDocketAuditModal';
 import { FileDashboard } from './components/FileDashboard';
 import { LeaveCalendarView } from './components/LeaveCalendarView';
 import { PensionStudioView } from './components/PensionStudioView';
+import { HrmsView } from './components/HrmsView';
 import { UserManagementModal } from './components/UserManagementModal';
 import { KcsrRtiChatbot } from './components/KcsrRtiChatbot';
 import { RtiManagementView } from './components/RtiManagementView';
@@ -40,9 +46,10 @@ import {
   saveSingleEmployeeToFirestore, 
   deleteEmployeeFromFirestore 
 } from './lib/firebase';
-import { Check, AlertCircle, Sparkles, Users, ArrowLeft } from 'lucide-react';
+import { Check, AlertCircle, Sparkles, Users, ArrowLeft, Camera } from 'lucide-react';
 
 const MODULE_TITLES_KANNADA: Record<string, string> = {
+  hrms: '೨೩. ಮಾನವ ಸಂಪನ್ಮೂಲ ನಿರ್ವಹಣಾ ವ್ಯವಸ್ಥೆ (HRMS 2.0 / Human Resource Management System)',
   fileDashboard: '೧. ಕಡತಗಳ ಡ್ಯಾಶ್ ಬೋರ್ಡ್ (Files Dashboard & Movement)',
   generalLetter: '೨. ಸಾಮಾನ್ಯ ಕಡತ / ಸಾಮಾನ್ಯ ಪತ್ರ ತಯಾರಿಸಿ (General Letter Studio)',
   drafter: '೨. ಸಾಮಾನ್ಯ ಕಡತ / ಸಾಮಾನ್ಯ ಪತ್ರ ತಯಾರಿಸಿ (General Letter Studio)',
@@ -62,6 +69,11 @@ const MODULE_TITLES_KANNADA: Record<string, string> = {
   rti: '೧೬. ಮಾಹಿತಿ ಹಕ್ಕು ರಿಜಿಸ್ಟರ್ & ೧೮. RTI ಪತ್ರ ವ್ಯವಹಾರ (RTI Management)',
   registry: '೧೭. ಪತ್ರಗಳು (ಆವಕ & ಜಾವಕ e-Dak Registry)',
   files: '೮. ಕಡತಗಳ ನಿರ್ವಹಣೆ (Master Docket Files)',
+  pdfScanner: '೧೨. PDF ದಾಖಲೆ ಸ್ಕ್ಯಾನರ್ (Office PDF Document Scanner & Compressor)',
+  jpgConverter: '೧೯. ಜೆಪಿ ಕನ್ವರ್ಟ್ (JPEG to JPG Converter & Compressor)',
+  imageCompressor: '೨೦. ಜೆಪಿಜಿ ಕಂಪ್ರೆಸ್ (JPG Image Compressor to 20KB/50KB/100KB)',
+  pdfCompressor: '೨೧. PDF ಕಂಪ್ರೆಸರ್ (PDF Compressor & Size Reducer)',
+  pdfMerger: '೨೨. PDF ವಿಲೀನ (PDF Merger & Document Consolidation)',
 };
 
 export default function App() {
@@ -109,6 +121,8 @@ export default function App() {
   // Navigation: Primary Karnataka Govt Memorandum Dashboard
   const [activeTab, setActiveTab] = useState<AppNavTab>('home');
   const [prapathraInitialMonth, setPrapathraInitialMonth] = useState<'January' | 'July'>('January');
+  const [filesInitialFilter, setFilesInitialFilter] = useState<{ status?: string; priority?: 'all' | 'urgent' | 'normal' | 'dueSoon' | 'pending'; fileId?: string } | undefined>(undefined);
+  const [jpgConverterInitialMode, setJpgConverterInitialMode] = useState<'imageToJpg' | 'pdfToJpg' | 'jpgToPdf'>('imageToJpg');
 
   // Modals & Active Viewers
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
@@ -177,6 +191,51 @@ export default function App() {
     }
   }, []);
 
+// Utility to strictly deduplicate employee lists by ID, KGID, and Employee Code
+export function deduplicateEmployees(list: Employee[]): Employee[] {
+  if (!Array.isArray(list)) return [];
+  const byId = new Map<string, Employee>();
+  const byKgid = new Map<string, string>(); // kgid -> id
+  const byCode = new Map<string, string>(); // code -> id
+
+  const result: Employee[] = [];
+
+  for (const emp of list) {
+    if (!emp) continue;
+    const empId = emp.id || (emp.kgidNumber ? `emp-${emp.kgidNumber}` : `emp-${Math.random().toString(36).substring(2, 9)}`);
+    const cleanKgid = emp.kgidNumber ? String(emp.kgidNumber).trim() : '';
+    const cleanCode = emp.employeeCode ? String(emp.employeeCode).trim() : '';
+
+    // Check if employee already exists by ID, KGID, or Code
+    const existingId = (byId.has(empId) ? empId : null) || 
+      (cleanKgid && byKgid.has(cleanKgid) ? byKgid.get(cleanKgid) : null) || 
+      (cleanCode && byCode.has(cleanCode) ? byCode.get(cleanCode) : null);
+
+    if (existingId && byId.has(existingId)) {
+      // Merge updates into the existing record
+      const existing = byId.get(existingId)!;
+      const merged: Employee = { 
+        ...existing, 
+        ...emp, 
+        id: existingId,
+        kgidNumber: cleanKgid || existing.kgidNumber,
+        employeeCode: cleanCode || existing.employeeCode
+      };
+      byId.set(existingId, merged);
+      const idx = result.findIndex(r => r.id === existingId);
+      if (idx !== -1) result[idx] = merged;
+    } else {
+      const normalizedEmp: Employee = { ...emp, id: empId };
+      byId.set(empId, normalizedEmp);
+      if (cleanKgid) byKgid.set(cleanKgid, empId);
+      if (cleanCode) byCode.set(cleanCode, empId);
+      result.push(normalizedEmp);
+    }
+  }
+
+  return result;
+}
+
   // Fetch departmental employees establishment with durable multi-layer persistence
   const fetchEmployees = useCallback(async () => {
     // 1. Instant hydration from localStorage cache
@@ -185,7 +244,7 @@ export default function App() {
       if (cached) {
         const parsed: Employee[] = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setEmployees(parsed);
+          setEmployees(deduplicateEmployees(parsed));
         }
       }
     } catch (e) {
@@ -209,59 +268,31 @@ export default function App() {
         console.warn('Firestore fetch employees note:', fErr);
       }
 
-      // 4. Merge all sources using unique identifier (kgidNumber, employeeCode, or id)
-      const mergedMap = new Map<string, Employee>();
+      // 4. Merge all sources safely
+      const combinedPool = [
+        ...serverList,
+        ...firestoreList,
+        ...SEED_OFFICE_STAFF
+      ];
 
-      // Base server list
-      serverList.forEach(e => {
-        const key = (e.kgidNumber && e.kgidNumber.trim()) || (e.employeeCode && e.employeeCode.trim()) || e.id;
-        mergedMap.set(key, e);
-      });
-
-      // Merge Firestore records
-      let hasMissingOnServer = false;
-      firestoreList.forEach(e => {
-        const key = (e.kgidNumber && e.kgidNumber.trim()) || (e.employeeCode && e.employeeCode.trim()) || e.id;
-        if (!mergedMap.has(key)) {
-          mergedMap.set(key, e);
-          hasMissingOnServer = true;
-        }
-      });
-
-      // Merge local storage records
       try {
         const cached = localStorage.getItem('edu_persistent_employees');
         if (cached) {
           const parsed: Employee[] = JSON.parse(cached);
-          parsed.forEach(e => {
-            const key = (e.kgidNumber && e.kgidNumber.trim()) || (e.employeeCode && e.employeeCode.trim()) || e.id;
-            if (!mergedMap.has(key)) {
-              mergedMap.set(key, e);
-              hasMissingOnServer = true;
-            }
-          });
+          if (Array.isArray(parsed)) combinedPool.push(...parsed);
         }
       } catch (e) {}
 
-      // 3.5 Merge official BEO office staff members so they are always in the roster
-      SEED_OFFICE_STAFF.forEach(staff => {
-        const key = (staff.kgidNumber && staff.kgidNumber.trim()) || (staff.employeeCode && staff.employeeCode.trim()) || staff.id;
-        if (!mergedMap.has(key)) {
-          mergedMap.set(key, staff);
-          hasMissingOnServer = true;
-        }
-      });
-
-      const finalList = Array.from(mergedMap.values());
+      const finalList = deduplicateEmployees(combinedPool);
       setEmployees(finalList);
 
-      // Save to localStorage for instant hydration on any reload / login
+      // Save sanitized list to localStorage
       try {
         localStorage.setItem('edu_persistent_employees', JSON.stringify(finalList));
       } catch (e) {}
 
-      // If Firestore or local had employees that the server disk didn't have, sync back to server
-      if (hasMissingOnServer && finalList.length > serverList.length) {
+      // If local/firestore had new employees, sync to server
+      if (finalList.length > serverList.length) {
         fetch('/api/employees/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -336,9 +367,9 @@ export default function App() {
     );
   }, [files, isAdmin, selectedUserFilter, currentUser]);
 
-  // Visible Employees
+  // Visible Employees (strictly deduplicated to guarantee unique React keys)
   const visibleEmployees = useMemo(() => {
-    return employees;
+    return deduplicateEmployees(employees);
   }, [employees]);
 
   const handleLoginSuccess = (user: AdminAuthUser, _token: string) => {
@@ -474,6 +505,54 @@ export default function App() {
 
     setFiles(prev => prev.map(f => f.id === fileId ? data.file : f));
     showToast(`Docket transferred to ${toOfficer}`);
+  };
+
+  // Bulk Status Update for multiple selected dockets
+  const handleBulkUpdateDocketStatus = async (fileIds: string[], newStatus: string) => {
+    try {
+      const res = await fetch('/api/files/bulk-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileIds, newStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update docket status in bulk');
+
+      if (data.files && Array.isArray(data.files)) {
+        setFiles(prev => prev.map(f => {
+          const updated = data.files.find((u: MasterDocketFile) => u.id === f.id);
+          return updated || f;
+        }));
+      }
+      showToast(`${fileIds.length} ಕಡತಗಳ ಸ್ಥಿತಿಯನ್ನು ಯಶಸ್ವಿಯಾಗಿ '${newStatus}' ಗೆ ನವೀಕರಿಸಲಾಗಿದೆ`);
+    } catch (err: any) {
+      showToast(err.message || 'ಬೃಹತ್ ಸ್ಥಿತಿ ಬದಲಾವಣೆ ವಿಫಲವಾಗಿದೆ');
+      throw err;
+    }
+  };
+
+  // Section Transfer utility with audit trail (Movement History with timestamp & initiating officer)
+  const handleSectionTransfer = async (
+    fileId: string,
+    toSection: DepartmentSection,
+    transferNote: string,
+    initiatingOfficer: string
+  ) => {
+    try {
+      const res = await fetch(`/api/files/${fileId}/transfer-section`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toSection, transferNote, initiatingOfficer }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to transfer section');
+
+      setFiles(prev => prev.map(f => f.id === fileId ? data.file : f));
+      showToast(`ಕಡತವನ್ನು ಯಶಸ್ವಿಯಾಗಿ "${toSection}" ವಿಭಾಗಕ್ಕೆ ವರ್ಗಾಯಿಸಲಾಗಿದೆ`);
+    } catch (err: any) {
+      showToast(err.message || 'ವಿಭಾಗ ವರ್ಗಾವಣೆ ವಿಫಲವಾಗಿದೆ');
+      throw err;
+    }
   };
 
   // Handle Save RTI File (Calls POST /api/files with RTI payload)
@@ -1082,6 +1161,18 @@ export default function App() {
                   if (extra?.prefillEmployee) {
                     setSelectedEmployeeForStudio(extra.prefillEmployee);
                   }
+                  if (extra?.status || extra?.priority || extra?.fileId) {
+                    setFilesInitialFilter({
+                      status: extra.status,
+                      priority: extra.priority,
+                      fileId: extra.fileId,
+                    });
+                  }
+                  if (extra?.mode) {
+                    setJpgConverterInitialMode(extra.mode);
+                  } else if (tab === 'jpgConverter') {
+                    setJpgConverterInitialMode('imageToJpg');
+                  }
                   setActiveTab(tab);
                 }}
                 onCreateFile={handleCreateDocketFile}
@@ -1158,6 +1249,20 @@ export default function App() {
                   fetchLetters();
                 }}
                 showToast={showToast}
+              />
+            )}
+
+            {/* MODULE: ಮಾನವ ಸಂಪನ್ಮೂಲ ನಿರ್ವಹಣಾ ವ್ಯವಸ್ಥೆ (HRMS 2.0 / HUMAN RESOURCE MANAGEMENT SYSTEM) */}
+            {activeTab === 'hrms' && (
+              <HrmsView
+                currentUser={currentUser}
+                employees={visibleEmployees}
+                onOpenEmployeeProfile={(emp) => {
+                  setEditingEmployee(emp);
+                  setIsEmployeeModalOpen(true);
+                }}
+                onNavigateTab={(tab) => setActiveTab(tab as any)}
+                onShowToast={showToast}
               />
             )}
 
@@ -1286,6 +1391,8 @@ export default function App() {
             {activeTab === 'reports' && (
               <MemorandumReportsView
                 currentUser={currentUser}
+                files={visibleFiles}
+                letters={visibleLetters}
                 onGenerateOrderForEmployee={(emp) => {
                   setActiveTab('memorandum');
                 }}
@@ -1355,12 +1462,16 @@ export default function App() {
                 letters={visibleLetters}
                 onCreateFile={handleCreateDocketFile}
                 onMoveFile={handleMoveDocketFile}
+                onSectionTransfer={handleSectionTransfer}
                 onUpdateFileCategory={handleUpdateFileCategory}
+                onBulkUpdateStatus={handleBulkUpdateDocketStatus}
                 onSelectLetter={(letter) => setViewingLetter(letter)}
                 onOpenNewRtiFile={() => setIsRtiModalOpen(true)}
                 onOpenRtiReply={handleOpenRtiReplyStudio}
                 onViewAttachment={(att) => setViewingAttachment(att)}
                 onUploadAttachmentToFile={handleUploadAttachmentToFile}
+                onOpenPdfScanner={() => setActiveTab('pdfScanner')}
+                initialFilter={filesInitialFilter}
               />
             )}
 
@@ -1382,6 +1493,10 @@ export default function App() {
                 files={visibleFiles}
                 onSaveLetterToRegistry={handleSaveLetter}
                 showToast={showToast}
+                initialDocketFile={selectedRtiFileForReply}
+                onUploadAttachmentToFile={handleUploadAttachmentToFile}
+                onViewAttachment={(att) => setViewingAttachment(att)}
+                onCreateFile={handleCreateDocketFile}
               />
             )}
 
@@ -1392,6 +1507,49 @@ export default function App() {
                 files={visibleFiles}
                 employees={visibleEmployees}
                 onSaveLetter={handleSaveLetter}
+                onBackToHome={() => setActiveTab('home')}
+              />
+            )}
+
+            {/* MODULE 12: PDF ದಾಖಲೆ ಸ್ಕ್ಯಾನರ್ (PDF DOCUMENT SCANNER & COMPRESSOR) */}
+            {activeTab === 'pdfScanner' && (
+              <PdfScannerView
+                files={visibleFiles}
+                onAttachToDocket={async (fileId, attachment) => {
+                  await handleUploadAttachmentToFile(fileId, attachment);
+                  showToast('ದಾಖಲೆಯನ್ನು ಕಡತಕ್ಕೆ ಯಶಸ್ವಿಯಾಗಿ ಲಗತ್ತಿಸಲಾಗಿದೆ!');
+                }}
+                onBackToHome={() => setActiveTab('home')}
+                showToast={showToast}
+              />
+            )}
+
+            {/* MODULE 19: ಜೆಪಿ ಕನ್ವರ್ಟ್ (PDF & JPG CONVERTER) */}
+            {activeTab === 'jpgConverter' && (
+              <JpgConverterView
+                key={jpgConverterInitialMode}
+                initialMode={jpgConverterInitialMode}
+                onBackToHome={() => setActiveTab('home')}
+              />
+            )}
+
+            {/* MODULE 20: ಜೆಪಿಜಿ ಕಂಪ್ರೆಸ್ (JPG IMAGE COMPRESSOR TO 20KB/50KB/100KB) */}
+            {activeTab === 'imageCompressor' && (
+              <ImageCompressorView
+                onBackToHome={() => setActiveTab('home')}
+              />
+            )}
+
+            {/* MODULE 21: PDF ಕಂಪ್ರೆಸರ್ (PDF COMPRESSOR & SIZE REDUCER) */}
+            {activeTab === 'pdfCompressor' && (
+              <PdfCompressorView
+                onBackToHome={() => setActiveTab('home')}
+              />
+            )}
+
+            {/* MODULE 22: PDF ವಿಲೀನ (PDF MERGER & CONSOLIDATION) */}
+            {activeTab === 'pdfMerger' && (
+              <PdfMergerView
                 onBackToHome={() => setActiveTab('home')}
               />
             )}
@@ -1518,22 +1676,41 @@ export default function App() {
         currentUser={currentUser}
       />
 
-      {/* FLOATING ACTION BUTTON: AI CHATBOT TRIGGER */}
+      {/* FLOATING ACTION BUTTONS: FAST PDF SCANNER & AI CHATBOT TRIGGER */}
       {!isAiChatOpen && (
-        <button
-          id="floating-ai-chatbot-btn"
-          onClick={() => setIsAiChatOpen(true)}
-          className="fixed bottom-6 right-6 z-40 bg-gradient-to-r from-purple-800 via-indigo-900 to-[#2b2b2b] text-white px-4 py-3 rounded-2xl shadow-[4px_4px_0px_#f59e0b] border-2 border-[#2b2b2b] hover:shadow-[6px_6px_0px_#f59e0b] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all flex items-center gap-2.5 font-bold font-kannada cursor-pointer group no-print"
-          title="KCSR & RTI AI ಸಹಾಯಕ (Gemini 3.8 Flash) ಆರಂಭಿಸಿ"
-        >
-          <div className="w-7 h-7 rounded-xl bg-amber-400 text-stone-900 flex items-center justify-center shrink-0 shadow-sm group-hover:rotate-12 transition-transform">
-            <Sparkles className="w-4 h-4 fill-amber-900 text-stone-950" />
-          </div>
-          <div className="text-left leading-tight hidden sm:block">
-            <span className="block text-xs text-amber-300 font-bold font-kannada">KCSR & RTI</span>
-            <span className="block text-[11px] text-white/90">AI ಸಹಾಯಕ</span>
-          </div>
-        </button>
+        <div className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 no-print">
+          {/* Quick PDF Scanner Button (Fast Document Scanning) */}
+          <button
+            id="floating-quick-scanner-btn"
+            onClick={() => setActiveTab('pdfScanner')}
+            className="bg-gradient-to-r from-emerald-800 via-teal-900 to-[#143024] text-white px-3.5 py-3 rounded-2xl shadow-[4px_4px_0px_#10b981] border-2 border-[#10b981]/90 hover:shadow-[6px_6px_0px_#10b981] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all flex items-center gap-2 font-bold font-kannada cursor-pointer group"
+            title="PDF ದಾಖಲೆ ಸ್ಕ್ಯಾನರ್ (Fast HD Document Scanner) ತಕ್ಷಣ ತೆರೆಯಿರಿ"
+          >
+            <div className="w-7 h-7 rounded-xl bg-emerald-400 text-stone-950 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform">
+              <Camera className="w-4 h-4 text-emerald-950" />
+            </div>
+            <div className="text-left leading-tight hidden sm:block">
+              <span className="block text-xs text-emerald-300 font-bold font-kannada">PDF ಸ್ಕ್ಯಾನರ್</span>
+              <span className="block text-[11px] text-white/90">ದಾಖಲೆ ಸೆರೆಹಿಡಿ</span>
+            </div>
+          </button>
+
+          {/* AI Chatbot Button */}
+          <button
+            id="floating-ai-chatbot-btn"
+            onClick={() => setIsAiChatOpen(true)}
+            className="bg-gradient-to-r from-purple-800 via-indigo-900 to-[#2b2b2b] text-white px-4 py-3 rounded-2xl shadow-[4px_4px_0px_#f59e0b] border-2 border-[#2b2b2b] hover:shadow-[6px_6px_0px_#f59e0b] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all flex items-center gap-2.5 font-bold font-kannada cursor-pointer group"
+            title="KCSR & RTI AI ಸಹಾಯಕ (Gemini 3.8 Flash) ಆರಂಭಿಸಿ"
+          >
+            <div className="w-7 h-7 rounded-xl bg-amber-400 text-stone-900 flex items-center justify-center shrink-0 shadow-sm group-hover:rotate-12 transition-transform">
+              <Sparkles className="w-4 h-4 fill-amber-900 text-stone-950" />
+            </div>
+            <div className="text-left leading-tight hidden sm:block">
+              <span className="block text-xs text-amber-300 font-bold font-kannada">KCSR & RTI</span>
+              <span className="block text-[11px] text-white/90">AI ಸಹಾಯಕ</span>
+            </div>
+          </button>
+        </div>
       )}
     </div>
   );

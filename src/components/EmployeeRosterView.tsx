@@ -25,7 +25,9 @@ import {
   X,
   Award,
   TrendingUp,
-  Coins
+  Coins,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { Employee, DepartmentSection, EmployeeStatus, EmployeeRole, EducationLetter, MasterDocketFile } from '../types';
 
@@ -66,6 +68,195 @@ const STATUSES: (EmployeeStatus | 'all')[] = [
   'Retired',
 ];
 
+export interface YearsOfServiceInfo {
+  years: number;
+  months: number;
+  days: number;
+  decimalYears: number;
+  yearsServedLabel: string;
+  kannadaLabel: string;
+  tenureTier: 'senior' | 'mid' | 'junior' | 'probation';
+  tooltip: string;
+}
+
+/**
+ * Robust date parser supporting YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY
+ */
+export function parseDateFlexible(dateStr?: string): Date | null {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const trimmed = dateStr.trim();
+  if (!trimmed) return null;
+
+  // Check ISO format YYYY-MM-DD or YYYY/MM/DD
+  if (/^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}/.test(trimmed)) {
+    const d = new Date(trimmed);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // Check DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = trimmed.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const month = parseInt(dmyMatch[2], 10) - 1;
+    const year = parseInt(dmyMatch[3], 10);
+    const d = new Date(year, month, day);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  const fallback = new Date(trimmed);
+  if (!isNaN(fallback.getTime())) return fallback;
+
+  return null;
+}
+
+/**
+ * Dynamically calculates years, months, and days of service using joiningDate compared to the current date
+ */
+export function calculateYearsServed(joiningDate?: string): YearsOfServiceInfo | null {
+  const join = parseDateFlexible(joiningDate);
+  if (!join) return null;
+
+  const now = new Date();
+  if (join > now) {
+    return {
+      years: 0,
+      months: 0,
+      days: 0,
+      decimalYears: 0,
+      yearsServedLabel: 'Upcoming Join',
+      kannadaLabel: 'ಮುಂದಿನ ನೇಮಕಾತಿ',
+      tenureTier: 'probation',
+      tooltip: `Joining date is in the future: ${joiningDate}`
+    };
+  }
+
+  let years = now.getFullYear() - join.getFullYear();
+  let months = now.getMonth() - join.getMonth();
+  let days = now.getDate() - join.getDate();
+
+  if (days < 0) {
+    months -= 1;
+    const prevMonthDays = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+    days += prevMonthDays;
+  }
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+
+  const decimalYears = Number((years + months / 12 + days / 365.25).toFixed(1));
+
+  let yearsServedLabel = `${years} Yrs Served`;
+  let kannadaLabel = `${years} ವರ್ಷಗಳ ಸೇವೆ`;
+
+  if (years === 0) {
+    if (months > 0) {
+      yearsServedLabel = `${months} Mo${months > 1 ? 's' : ''} Served`;
+      kannadaLabel = `${months} ತಿಂಗಳ ಸೇವೆ`;
+    } else {
+      yearsServedLabel = `${days} Day${days !== 1 ? 's' : ''} Served`;
+      kannadaLabel = `${days} ದಿನಗಳ ಸೇವೆ`;
+    }
+  } else if (years === 1 && months === 0) {
+    yearsServedLabel = '1 Yr Served';
+    kannadaLabel = '1 ವರ್ಷದ ಸೇವೆ';
+  }
+
+  let tenureTier: 'senior' | 'mid' | 'junior' | 'probation' = 'junior';
+  if (years >= 25) {
+    tenureTier = 'senior';
+  } else if (years >= 15) {
+    tenureTier = 'mid';
+  } else if (years >= 5) {
+    tenureTier = 'junior';
+  } else {
+    tenureTier = 'probation';
+  }
+
+  const parts: string[] = [];
+  if (years > 0) parts.push(`${years} ${years === 1 ? 'year' : 'years'}`);
+  if (months > 0) parts.push(`${months} ${months === 1 ? 'month' : 'months'}`);
+  if (days > 0 && years < 3) parts.push(`${days} ${days === 1 ? 'day' : 'days'}`);
+
+  const tooltip = `Joined: ${joiningDate} (${parts.join(', ') || 'Just joined'}) • ${yearsServedLabel}`;
+
+  return {
+    years,
+    months,
+    days,
+    decimalYears,
+    yearsServedLabel,
+    kannadaLabel,
+    tenureTier,
+    tooltip
+  };
+}
+
+/**
+ * Automated 'Years of Service' badge displaying the 'Years Served' indicator dynamically
+ */
+export const YearsOfServiceBadge: React.FC<{
+  joiningDate?: string;
+  size?: 'sm' | 'md' | 'lg';
+  showKannada?: boolean;
+  className?: string;
+  id?: string;
+}> = ({ joiningDate, size = 'sm', showKannada = false, className = '', id }) => {
+  const service = calculateYearsServed(joiningDate);
+  if (!service) {
+    return (
+      <span 
+        id={id}
+        data-testid="years-served-badge"
+        className="text-[10px] text-stone-400 italic px-1.5 py-0.5 rounded bg-stone-50 border border-stone-200 inline-flex items-center"
+      >
+        No Join Date
+      </span>
+    );
+  }
+
+  let colorClasses = 'bg-stone-100 text-stone-800 border-stone-300';
+  let badgeIcon = <Clock className={size === 'lg' ? 'w-4 h-4 text-stone-600' : 'w-3 h-3 text-stone-600'} />;
+
+  if (service.tenureTier === 'senior') {
+    colorClasses = 'bg-amber-100 text-amber-950 border-amber-400 shadow-[1px_1px_0px_#78350f]';
+    badgeIcon = <Award className={size === 'lg' ? 'w-4 h-4 text-amber-700' : 'w-3 h-3 text-amber-700'} />;
+  } else if (service.tenureTier === 'mid') {
+    colorClasses = 'bg-emerald-100 text-emerald-950 border-emerald-400 shadow-[1px_1px_0px_#065f46]';
+    badgeIcon = <Award className={size === 'lg' ? 'w-4 h-4 text-emerald-700' : 'w-3 h-3 text-emerald-700'} />;
+  } else if (service.tenureTier === 'junior') {
+    colorClasses = 'bg-sky-100 text-sky-950 border-sky-400 shadow-[1px_1px_0px_#0369a1]';
+    badgeIcon = <Clock className={size === 'lg' ? 'w-4 h-4 text-sky-700' : 'w-3 h-3 text-sky-700'} />;
+  } else {
+    colorClasses = 'bg-purple-100 text-purple-950 border-purple-400 shadow-[1px_1px_0px_#581c87]';
+    badgeIcon = <Sparkles className={size === 'lg' ? 'w-4 h-4 text-purple-700' : 'w-3 h-3 text-purple-700'} />;
+  }
+
+  const sizeClasses = 
+    size === 'lg' 
+      ? 'px-3 py-1 text-xs' 
+      : size === 'md' 
+        ? 'px-2 py-0.5 text-[11px]' 
+        : 'px-1.5 py-0.5 text-[10px]';
+
+  return (
+    <span
+      id={id}
+      data-testid="years-served-badge"
+      className={`inline-flex items-center gap-1 font-bold rounded border tracking-tight cursor-help transition-all hover:scale-105 select-none ${colorClasses} ${sizeClasses} ${className}`}
+      title={service.tooltip}
+    >
+      {badgeIcon}
+      <span className="font-mono font-black">{service.yearsServedLabel}</span>
+      {showKannada && (
+        <span className="font-kannada font-normal text-[9px] opacity-85 border-l border-current pl-1 ml-0.5 hidden sm:inline">
+          {service.kannadaLabel}
+        </span>
+      )}
+    </span>
+  );
+};
+
 export const EmployeeRosterView: React.FC<EmployeeRosterViewProps> = ({
   employees = [],
   letters = [],
@@ -89,6 +280,7 @@ export const EmployeeRosterView: React.FC<EmployeeRosterViewProps> = ({
   const [selectedRole, setSelectedRole] = useState<string>('all');
   const [selectedEmployeeForDossier, setSelectedEmployeeForDossier] = useState<Employee | null>(null);
   const [rosterViewTab, setRosterViewTab] = useState<'all' | 'office' | 'additional'>('all');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
   // Multi-selection for batch deletion
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -607,10 +799,11 @@ export const EmployeeRosterView: React.FC<EmployeeRosterViewProps> = ({
             <button
               id="btn-export-emp-csv"
               onClick={handleExportCSV}
-              className="px-2.5 py-1.5 text-xs font-medium text-stone-700 bg-white hover:bg-stone-100 border border-stone-300 rounded-lg shadow-2xs transition-colors flex items-center gap-1"
-              title="Export displayed employees to CSV"
+              className="px-3 py-1.5 text-xs font-bold text-[#2b2b2b] bg-white hover:bg-stone-100 border-2 border-[#2b2b2b] rounded-lg shadow-[2px_2px_0px_#2b2b2b] transition-all cursor-pointer flex items-center gap-1.5"
+              title="Export staff establishment list to CSV for external reporting"
             >
-              <span>.CSV</span>
+              <Download className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Export as CSV</span>
             </button>
 
             {onClearAllEmployees && employees.length > 0 && (
@@ -685,67 +878,101 @@ export const EmployeeRosterView: React.FC<EmployeeRosterViewProps> = ({
         </div>
 
         {/* Filter & Search Toolbar */}
-        <div className="p-4 border-b-2 border-[#2b2b2b] bg-white grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Search */}
-          <div className="relative">
-            <Search className="w-4 h-4 text-[#2b2b2b] absolute left-3 top-2.5" />
-            <input
-              id="input-search-employees"
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by name, ID, title, email..."
-              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#2b2b2b] focus:outline-none focus:bg-[#fffbf2]"
-            />
+        <div className="p-4 border-b-2 border-[#2b2b2b] bg-white flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 flex-1">
+            {/* Search */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-[#2b2b2b] absolute left-3 top-2.5" />
+              <input
+                id="input-search-employees"
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by name, ID, title, email..."
+                className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#2b2b2b] focus:outline-none focus:bg-[#fffbf2]"
+              />
+            </div>
+
+            {/* Section Filter */}
+            <div>
+              <select
+                id="select-filter-section"
+                value={selectedSection}
+                onChange={(e) => setSelectedSection(e.target.value as any)}
+                className="w-full px-3 py-1.5 text-xs rounded-lg border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#2b2b2b] focus:outline-none text-[#2b2b2b] font-medium"
+              >
+                <option value="all">All Wings / Sections</option>
+                {SECTIONS.filter(s => s !== 'all').map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status Filter */}
+            <div>
+              <select
+                id="select-filter-status"
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value as any)}
+                className="w-full px-3 py-1.5 text-xs rounded-lg border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#2b2b2b] focus:outline-none text-[#2b2b2b] font-medium"
+              >
+                <option value="all">All Statuses</option>
+                {STATUSES.filter(s => s !== 'all').map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Role Filter */}
+            <div>
+              <select
+                id="select-filter-role"
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value)}
+                className="w-full px-3 py-1.5 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-stone-700"
+              >
+                <option value="all">All Role Categories</option>
+                <option value="Director / HOD">Director / HOD</option>
+                <option value="District Officer">District Officer</option>
+                <option value="Section Officer">Section Officer</option>
+                <option value="Superintendent">Superintendent</option>
+                <option value="Inspector / Evaluator">Inspector / Evaluator</option>
+                <option value="Clerk / Assistant">Clerk / Assistant</option>
+                <option value="Faculty / Principal">Faculty / Principal</option>
+              </select>
+            </div>
           </div>
 
-          {/* Section Filter */}
-          <div>
-            <select
-              id="select-filter-section"
-              value={selectedSection}
-              onChange={(e) => setSelectedSection(e.target.value as any)}
-              className="w-full px-3 py-1.5 text-xs rounded-lg border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#2b2b2b] focus:outline-none text-[#2b2b2b] font-medium"
+          {/* View Mode Toggle: Cards vs Table */}
+          <div className="flex items-center gap-1 bg-amber-50/80 p-1 rounded-lg border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#2b2b2b] shrink-0 self-start xl:self-center">
+            <button
+              type="button"
+              id="btn-roster-view-cards"
+              onClick={() => setViewMode('cards')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-1.5 transition-all cursor-pointer font-kannada ${
+                viewMode === 'cards'
+                  ? 'bg-[#2b2b2b] text-white shadow-xs'
+                  : 'text-stone-700 hover:bg-white'
+              }`}
+              title="ಕಾರ್ಡ್ ವೀಕ್ಷಣೆ (Cards View - Detailed Employee Cards with Years Served badges)"
             >
-              <option value="all">All Wings / Sections</option>
-              {SECTIONS.filter(s => s !== 'all').map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Status Filter */}
-          <div>
-            <select
-              id="select-filter-status"
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value as any)}
-              className="w-full px-3 py-1.5 text-xs rounded-lg border-2 border-[#2b2b2b] shadow-[2px_2px_0px_#2b2b2b] focus:outline-none text-[#2b2b2b] font-medium"
+              <LayoutGrid className="w-3.5 h-3.5 text-amber-400" />
+              <span>ಕಾರ್ಡ್‌ಗಳು (Cards)</span>
+            </button>
+            <button
+              type="button"
+              id="btn-roster-view-table"
+              onClick={() => setViewMode('table')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-1.5 transition-all cursor-pointer font-kannada ${
+                viewMode === 'table'
+                  ? 'bg-[#2b2b2b] text-white shadow-xs'
+                  : 'text-stone-700 hover:bg-white'
+              }`}
+              title="ಕೋಷ್ಟಕ ವೀಕ್ಷಣೆ (Table View)"
             >
-              <option value="all">All Statuses</option>
-              {STATUSES.filter(s => s !== 'all').map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Role Filter */}
-          <div>
-            <select
-              id="select-filter-role"
-              value={selectedRole}
-              onChange={(e) => setSelectedRole(e.target.value)}
-              className="w-full px-3 py-1.5 text-xs rounded-lg border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 text-stone-700"
-            >
-              <option value="all">All Role Categories</option>
-              <option value="Director / HOD">Director / HOD</option>
-              <option value="District Officer">District Officer</option>
-              <option value="Section Officer">Section Officer</option>
-              <option value="Superintendent">Superintendent</option>
-              <option value="Inspector / Evaluator">Inspector / Evaluator</option>
-              <option value="Clerk / Assistant">Clerk / Assistant</option>
-              <option value="Faculty / Principal">Faculty / Principal</option>
-            </select>
+              <List className="w-3.5 h-3.5 text-sky-400" />
+              <span>ಕೋಷ್ಟಕ (Table)</span>
+            </button>
           </div>
         </div>
 
@@ -868,6 +1095,7 @@ export const EmployeeRosterView: React.FC<EmployeeRosterViewProps> = ({
                                     ⭐ DDO
                                   </span>
                                 )}
+                                <YearsOfServiceBadge joiningDate={emp.joiningDate} size="sm" showKannada={true} />
                               </div>
                             </div>
                             <button
@@ -878,6 +1106,19 @@ export const EmployeeRosterView: React.FC<EmployeeRosterViewProps> = ({
                               <Edit3 className="w-3.5 h-3.5" />
                               <span className="text-[11px]">ತಿದ್ದುಪಡಿ</span>
                             </button>
+                          </div>
+
+                          {/* Automated Years of Service Badge & Joining Date */}
+                          <div className="bg-gradient-to-r from-amber-50 to-orange-50/50 p-2 rounded-lg border-2 border-amber-200/90 flex items-center justify-between gap-2 shadow-2xs">
+                            <div className="text-[11px]">
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-amber-900/80 block leading-tight">
+                                ಸೇವೆಗೆ ಸೇರಿದ ದಿನಾಂಕ (Joining Date)
+                              </span>
+                              <span className="font-mono font-bold text-stone-900 text-xs">
+                                {emp.joiningDate || 'N/A'}
+                              </span>
+                            </div>
+                            <YearsOfServiceBadge joiningDate={emp.joiningDate} size="md" showKannada={true} />
                           </div>
 
                           {/* Built-in Extra Information Fields */}
@@ -960,30 +1201,10 @@ export const EmployeeRosterView: React.FC<EmployeeRosterViewProps> = ({
               </div>
             )}
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-stone-100/90 text-stone-700 font-semibold border-b border-stone-200">
-                  <tr>
-                    <th className="py-3 px-3 w-10 text-center">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.size === filteredEmployees.length && filteredEmployees.length > 0}
-                        onChange={handleToggleSelectAll}
-                        className="rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
-                        title="Select All"
-                      />
-                    </th>
-                    <th className="py-3 px-4">Official / Designation</th>
-                    <th className="py-3 px-4">Emp Code & KGID</th>
-                    <th className="py-3 px-4">Wing & Office Location</th>
-                    <th className="py-3 px-4">ಮೂಲ ವೇತನ (Basic Pay)</th>
-                    <th className="py-3 px-4">ರಜೆ ಶಿಲ್ಕು (EL & HPL)</th>
-                    <th className="py-3 px-4">Contact</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-100">
+            {/* CARDS VIEW: Detailed employee cards with automated 'Years of Service' badge displaying 'Years Served' indicator */}
+            {viewMode === 'cards' && rosterViewTab !== 'additional' ? (
+              <div className="p-4 sm:p-5 bg-stone-50/50">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {filteredEmployees.map((emp) => {
                     const isSelected = selectedIds.has(emp.id);
                     const initials = emp.fullName
@@ -995,204 +1216,429 @@ export const EmployeeRosterView: React.FC<EmployeeRosterViewProps> = ({
                       .substring(0, 2)
                       .toUpperCase();
 
-                    const { assignedLetters, custodianFiles } = getEmployeeAssignments(emp);
-
                     return (
-                      <tr 
+                      <div
                         key={emp.id}
-                        className={`transition-colors group ${
-                          isSelected ? 'bg-amber-50/70' : 'hover:bg-amber-50/30'
+                        data-testid={`employee-card-${emp.id}`}
+                        className={`bg-white rounded-xl border-2 border-[#2b2b2b] p-4 shadow-[3px_3px_0px_#2b2b2b] hover:shadow-[4px_4px_0px_#f59e0b] transition-all flex flex-col justify-between space-y-3 ${
+                          isSelected ? 'bg-amber-50/70 ring-2 ring-amber-500' : ''
                         }`}
                       >
-                        {/* Checkbox */}
-                        <td className="py-3.5 px-3 text-center">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleToggleSelectOne(emp.id)}
-                            className="rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
-                          />
-                        </td>
-
-                        {/* Name & Title */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-900 font-bold flex items-center justify-center text-xs shrink-0 border border-amber-200">
-                            {initials || 'ED'}
+                        {/* Card Header: Checkbox, Avatar, Name, Designation, Role */}
+                        <div className="space-y-2.5">
+                          <div className="flex items-start justify-between gap-2 border-b border-stone-200 pb-2.5">
+                            <div className="flex items-start gap-2.5">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleToggleSelectOne(emp.id)}
+                                className="rounded text-amber-600 focus:ring-amber-500 cursor-pointer mt-1"
+                                title="ಆಯ್ಕೆಮಾಡಿ (Select)"
+                              />
+                              <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-950 font-black flex items-center justify-center text-xs shrink-0 border border-amber-300">
+                                {initials || 'ED'}
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-sm text-[#2b2b2b] leading-tight flex items-center gap-1.5 flex-wrap">
+                                  <span>{emp.fullName}</span>
+                                  {emp.isDdo && (
+                                    <span className="px-1.5 py-0.2 bg-amber-400 text-stone-950 font-black text-[9px] rounded border border-[#2b2b2b] shadow-2xs font-kannada">
+                                      ⭐ DDO
+                                    </span>
+                                  )}
+                                </h4>
+                                <p className="text-[11px] text-stone-600 mt-0.5 leading-snug">{emp.designation}</p>
+                                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                  <span className="font-mono text-[10px] bg-stone-100 px-1.5 py-0.5 rounded border border-stone-300">
+                                    {emp.employeeCode}
+                                  </span>
+                                  {emp.kgidNumber ? (
+                                    <span className="font-mono text-[10px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.5 rounded border border-amber-300">
+                                      KGID: {emp.kgidNumber}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-stone-400 italic">No KGID</span>
+                                  )}
+                                  <span className="text-[10px] text-stone-500 font-normal">
+                                    ({emp.employmentType})
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="shrink-0">
+                              {getStatusBadge(emp.status)}
+                            </div>
                           </div>
-                          <div>
-                            <div className="font-bold text-stone-900 flex items-center gap-1.5 flex-wrap">
-                              <span>{emp.fullName}</span>
-                              <span className="text-[10px] font-normal text-stone-500">
-                                ({emp.employmentType})
+
+                          {/* AUTOMATED YEARS OF SERVICE BADGE (YEARS SERVED INDICATOR) */}
+                          <div className="bg-gradient-to-r from-amber-50 to-orange-50/50 p-2.5 rounded-lg border-2 border-amber-200/90 flex items-center justify-between gap-2 shadow-2xs">
+                            <div className="text-[11px]">
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-amber-900/80 block leading-tight">
+                                ಸೇವೆಗೆ ಸೇರಿದ ದಿನಾಂಕ (Joining Date)
                               </span>
-                              {emp.isDdo && (
-                                <span className="px-1.5 py-0.5 bg-amber-400 text-stone-950 font-black text-[9px] rounded border border-[#2b2b2b] inline-flex items-center gap-0.5 shadow-2xs font-kannada">
-                                  ⭐ DDO
-                                </span>
-                              )}
-                              {emp.additionalFields && emp.additionalFields.length > 0 && (
-                                <span className="px-1.5 py-0.5 bg-purple-100 text-purple-900 border border-purple-300 text-[9px] rounded font-bold font-kannada">
-                                  +{emp.additionalFields.length} ಹೆಚ್ಚುವರಿ ವಿವರ
-                                </span>
-                              )}
+                              <span className="font-mono font-bold text-stone-900 text-xs">
+                                {emp.joiningDate || 'N/A'}
+                              </span>
                             </div>
-                            <div className="text-stone-600 text-[11px] flex items-center gap-1">
-                              <span>{emp.designation}</span>
-                              <span className="text-stone-300">•</span>
-                              <span className="text-stone-500 text-[10px]">{emp.role}</span>
+                            {/* Dynamic Years Served Indicator Badge */}
+                            <YearsOfServiceBadge 
+                              joiningDate={emp.joiningDate} 
+                              size="md" 
+                              showKannada={true} 
+                            />
+                          </div>
+
+                          {/* Section & Basic Pay */}
+                          <div className="grid grid-cols-2 gap-2 text-[11px]">
+                            <div className="bg-stone-50 p-2 rounded-lg border border-stone-200">
+                              <span className="text-[9px] font-bold text-stone-500 uppercase block">ಶಾಖೆ (Wing)</span>
+                              <span className="font-semibold text-stone-800 truncate block">{emp.section}</span>
+                              <span className="text-[10px] text-stone-500 truncate block mt-0.5">{emp.officeLocation}</span>
+                            </div>
+                            <div className="bg-stone-50 p-2 rounded-lg border border-stone-200">
+                              <span className="text-[9px] font-bold text-stone-500 uppercase block">ಮೂಲ ವೇತನ (Pay)</span>
+                              <span className="font-mono font-bold text-stone-900 block">
+                                ₹{(emp.basicPay || 37900).toLocaleString('en-IN')}/-
+                              </span>
+                              <span className="text-[10px] text-stone-500 truncate block">{emp.payScale || 'Level-9'}</span>
+                            </div>
+                          </div>
+
+                          {/* Leave balances */}
+                          <div className="flex items-center justify-between text-[11px] bg-stone-50 px-2 py-1.5 rounded-lg border border-stone-200">
+                            <span className="text-stone-600 font-kannada text-[10px] font-bold">ರಜೆ ಶಿಲ್ಕು:</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-950 font-bold rounded text-[10px] border border-emerald-300">
+                                EL: {emp.earnedLeaveBalance ?? 30} ದಿನ
+                              </span>
+                              <span className="px-1.5 py-0.5 bg-sky-100 text-sky-950 font-bold rounded text-[10px] border border-sky-300">
+                                HPL: {emp.halfPayLeaveBalance ?? 20} ದಿನ
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Contact Details */}
+                          <div className="flex items-center justify-between text-[11px] text-stone-600 pt-0.5">
+                            <div className="flex items-center gap-1 truncate max-w-[140px]">
+                              <Mail className="w-3 h-3 text-stone-400 shrink-0" />
+                              <a href={`mailto:${emp.email}`} className="truncate hover:text-amber-800 hover:underline">
+                                {emp.email}
+                              </a>
+                            </div>
+                            <div className="flex items-center gap-1 font-mono text-[10px]">
+                              <Phone className="w-3 h-3 text-stone-400 shrink-0" />
+                              <span>{emp.phone}</span>
                             </div>
                           </div>
                         </div>
-                      </td>
 
-                      {/* Employee Code & KGID */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="space-y-1">
-                          <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-stone-100 text-stone-800 border border-stone-200 block w-fit">
-                            {emp.employeeCode}
-                          </span>
-                          {emp.kgidNumber ? (
-                            <span className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200 block w-fit">
-                              KGID: {emp.kgidNumber}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-stone-400 italic">No KGID</span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Wing & Location */}
-                      <td className="py-3.5 px-4">
-                        <div className="font-medium text-stone-800">{emp.section}</div>
-                        <div className="text-[11px] text-stone-500 flex items-center gap-1 mt-0.5">
-                          <MapPin className="w-3 h-3 text-stone-400 shrink-0" />
-                          <span className="truncate max-w-[200px]">{emp.officeLocation}</span>
-                        </div>
-                      </td>
-
-                      {/* Basic Pay & Scale */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="space-y-0.5">
-                          <div className="font-mono font-bold text-stone-900 text-xs flex items-center gap-1">
-                            <span className="text-stone-500 font-sans font-normal">₹</span>
-                            <span>{(emp.basicPay || 37900).toLocaleString('en-IN')}</span>
-                            <span className="text-[10px] text-stone-400 font-sans font-normal">/mo</span>
+                        {/* Card Actions Footer */}
+                        <div className="pt-2 border-t border-stone-200 flex items-center justify-between gap-1">
+                          <div className="flex items-center gap-1">
+                            {onOpenServiceSanctions && (
+                              <button
+                                id={`btn-sanction-emp-${emp.id}`}
+                                onClick={() => onOpenServiceSanctions(emp)}
+                                className="px-2 py-1 text-[11px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                                title="ರಜೆ ಅಥವಾ ವೇತನ ಬಡ್ತಿ ಆದೇಶ ರಚಿಸಿ"
+                              >
+                                <Award className="w-3 h-3 text-amber-700" />
+                                <span>ಆದೇಶ</span>
+                              </button>
+                            )}
+                            {onDraftLetterForEmployee && (
+                              <button
+                                id={`btn-draft-letter-emp-${emp.id}`}
+                                onClick={() => onDraftLetterForEmployee(emp)}
+                                className="px-2 py-1 text-[11px] font-bold text-sky-900 bg-sky-100 hover:bg-sky-200 border border-sky-300 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                                title="ಪತ್ರ ರಚಿಸಿ"
+                              >
+                                <FileText className="w-3 h-3 text-sky-700" />
+                                <span>ಪತ್ರ</span>
+                              </button>
+                            )}
                           </div>
-                          {emp.payScale && (
-                            <div className="text-[10px] text-stone-500 font-mono">
-                              {emp.payScale}
-                            </div>
-                          )}
-                          {emp.serviceHistory && emp.serviceHistory.length > 0 && (
-                            <div className="text-[10px] text-emerald-700 font-semibold flex items-center gap-0.5">
-                              <TrendingUp className="w-2.5 h-2.5" />
-                              <span>{emp.serviceHistory.length} orders recorded</span>
-                            </div>
-                          )}
-                        </div>
-                      </td>
 
-                      {/* Leave Balances: EL & HPL (ಗಳಿಕೆ ರಜೆ ಮತ್ತು ಎಚ್ ಪಿ ಎಲ್) */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="space-y-1">
-                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-300 text-[11px] font-bold">
-                            <span className="font-kannada">ಗಳಿಕೆ (EL):</span>
-                            <span className="font-mono">{emp.earnedLeaveBalance ?? 30} ದಿನ</span>
-                          </div>
-                          <br />
-                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-300 text-[11px] font-bold">
-                            <span className="font-kannada">HPL:</span>
-                            <span className="font-mono">{emp.halfPayLeaveBalance ?? 20} ದಿನ</span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Contact */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-1 text-[11px] text-stone-700">
-                          <Mail className="w-3 h-3 text-stone-400 shrink-0" />
-                          <a href={`mailto:${emp.email}`} className="hover:text-amber-700 hover:underline truncate max-w-[170px]">
-                            {emp.email}
-                          </a>
-                        </div>
-                        <div className="flex items-center gap-1 text-[11px] text-stone-500 mt-0.5">
-                          <Phone className="w-3 h-3 text-stone-400 shrink-0" />
-                          <span>{emp.phone}</span>
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        {getStatusBadge(emp.status)}
-                      </td>
-
-                      {/* Action buttons */}
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {onOpenServiceSanctions && (
+                          <div className="flex items-center gap-1">
                             <button
-                              id={`btn-sanction-emp-${emp.id}`}
-                              onClick={() => onOpenServiceSanctions(emp)}
-                              className="px-2 py-1 text-[11px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg transition-colors flex items-center gap-1 shadow-2xs"
-                              title="ರಜೆ ಅಥವಾ ವೇತನ ಬಡ್ತಿ ಜ್ಞಾಪನಾ ಆದೇಶ ಸೃಜಿಸಿ (Leave & Increment Sanction Memo)"
+                              id={`btn-view-emp-${emp.id}`}
+                              onClick={() => setSelectedEmployeeForDossier(emp)}
+                              className="p-1.5 text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
+                              title="View Employee Dossier"
                             >
-                              <Award className="w-3 h-3 text-amber-700" />
-                              <span>ಆದೇಶ</span>
+                              <FileText className="w-3.5 h-3.5" />
                             </button>
-                          )}
-
-                          {onDraftLetterForEmployee && (
                             <button
-                              id={`btn-draft-letter-emp-${emp.id}`}
-                              onClick={() => onDraftLetterForEmployee(emp)}
-                              className="px-2 py-1 text-[11px] font-bold text-sky-900 bg-sky-100 hover:bg-sky-200 border border-sky-300 rounded-lg transition-colors flex items-center gap-1 shadow-2xs"
-                              title="ಈ ನೌಕರರಿಗೆ ಸಾಮಾನ್ಯ ಪತ್ರ ತಯಾರಿಸಿ (Draft General Letter for Employee)"
+                              id={`btn-edit-emp-${emp.id}`}
+                              onClick={() => onEditEmployee(emp)}
+                              className="p-1.5 text-amber-700 hover:text-amber-900 hover:bg-amber-100 rounded-lg transition-colors cursor-pointer"
+                              title="Edit Employee"
                             >
-                              <FileText className="w-3 h-3 text-sky-700" />
-                              <span>ಪತ್ರ</span>
+                              <Edit3 className="w-3.5 h-3.5" />
                             </button>
-                          )}
-
-                          <button
-                            id={`btn-view-emp-${emp.id}`}
-                            onClick={() => setSelectedEmployeeForDossier(emp)}
-                            className="p-1.5 text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors"
-                            title="View Employee Dossier & Assignments"
-                          >
-                            <FileText className="w-3.5 h-3.5" />
-                          </button>
-
-                          <button
-                            id={`btn-edit-emp-${emp.id}`}
-                            onClick={() => onEditEmployee(emp)}
-                            className="p-1.5 text-amber-700 hover:text-amber-900 hover:bg-amber-100/60 rounded-lg transition-colors font-medium flex items-center gap-1"
-                            title="Edit / Update Employee Data"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                            <span className="text-[11px] hidden sm:inline">Edit</span>
-                          </button>
-
-                          <button
-                            id={`btn-delete-emp-${emp.id}`}
-                            onClick={async () => {
-                              if (window.confirm(`Are you sure you want to remove employee record "${emp.fullName}" (${emp.employeeCode})?`)) {
-                                await onDeleteEmployee(emp.id);
-                              }
-                            }}
-                            className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
-                            title="Archive / Remove Employee"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                            <button
+                              id={`btn-delete-emp-${emp.id}`}
+                              onClick={async () => {
+                                if (window.confirm(`Are you sure you want to remove employee record "${emp.fullName}" (${emp.employeeCode})?`)) {
+                                  await onDeleteEmployee(emp.id);
+                                }
+                              }}
+                              className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Delete Employee"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                      </td>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-stone-100/90 text-stone-700 font-semibold border-b border-stone-200">
+                    <tr>
+                      <th className="py-3 px-3 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.size === filteredEmployees.length && filteredEmployees.length > 0}
+                          onChange={handleToggleSelectAll}
+                          className="rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                          title="Select All"
+                        />
+                      </th>
+                      <th className="py-3 px-4">Official / Designation</th>
+                      <th className="py-3 px-4">Emp Code & KGID</th>
+                      <th className="py-3 px-4">Wing & Office Location</th>
+                      <th className="py-3 px-4">ಮೂಲ ವೇತನ (Basic Pay)</th>
+                      <th className="py-3 px-4">ರಜೆ ಶಿಲ್ಕು (EL & HPL)</th>
+                      <th className="py-3 px-4">Contact</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {filteredEmployees.map((emp) => {
+                      const isSelected = selectedIds.has(emp.id);
+                      const initials = emp.fullName
+                        .replace(/^(Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.)\s*/i, '')
+                        .split(' ')
+                        .filter(Boolean)
+                        .map(n => n[0])
+                        .join('')
+                        .substring(0, 2)
+                        .toUpperCase();
+
+                      const { assignedLetters, custodianFiles } = getEmployeeAssignments(emp);
+
+                      return (
+                        <tr 
+                          key={emp.id}
+                          className={`transition-colors group ${
+                            isSelected ? 'bg-amber-50/70' : 'hover:bg-amber-50/30'
+                          }`}
+                        >
+                          {/* Checkbox */}
+                          <td className="py-3.5 px-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleSelectOne(emp.id)}
+                              className="rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                            />
+                          </td>
+
+                          {/* Name, Title, and Years Served Badge */}
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-900 font-bold flex items-center justify-center text-xs shrink-0 border border-amber-200">
+                                {initials || 'ED'}
+                              </div>
+                              <div>
+                                <div className="font-bold text-stone-900 flex items-center gap-1.5 flex-wrap">
+                                  <span>{emp.fullName}</span>
+                                  <span className="text-[10px] font-normal text-stone-500">
+                                    ({emp.employmentType})
+                                  </span>
+                                  <YearsOfServiceBadge joiningDate={emp.joiningDate} size="sm" showKannada={true} />
+                                  {emp.isDdo && (
+                                    <span className="px-1.5 py-0.5 bg-amber-400 text-stone-950 font-black text-[9px] rounded border border-[#2b2b2b] inline-flex items-center gap-0.5 shadow-2xs font-kannada">
+                                      ⭐ DDO
+                                    </span>
+                                  )}
+                                  {emp.additionalFields && emp.additionalFields.length > 0 && (
+                                    <span className="px-1.5 py-0.5 bg-purple-100 text-purple-900 border border-purple-300 text-[9px] rounded font-bold font-kannada">
+                                      +{emp.additionalFields.length} ಹೆಚ್ಚುವರಿ ವಿವರ
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-stone-600 text-[11px] flex items-center gap-1.5 flex-wrap mt-0.5">
+                                  <span>{emp.designation}</span>
+                                  <span className="text-stone-300">•</span>
+                                  <span className="text-stone-500 text-[10px]">{emp.role}</span>
+                                  {emp.joiningDate && (
+                                    <>
+                                      <span className="text-stone-300">•</span>
+                                      <span className="text-stone-500 text-[10px] font-mono">
+                                        ಸೇವೆ: {emp.joiningDate}
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Employee Code & KGID */}
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <div className="space-y-1">
+                              <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-stone-100 text-stone-800 border border-stone-200 block w-fit">
+                                {emp.employeeCode}
+                              </span>
+                              {emp.kgidNumber ? (
+                                <span className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200 block w-fit">
+                                  KGID: {emp.kgidNumber}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-stone-400 italic">No KGID</span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Wing & Location */}
+                          <td className="py-3.5 px-4">
+                            <div className="font-medium text-stone-800">{emp.section}</div>
+                            <div className="text-[11px] text-stone-500 flex items-center gap-1 mt-0.5">
+                              <MapPin className="w-3 h-3 text-stone-400 shrink-0" />
+                              <span className="truncate max-w-[200px]">{emp.officeLocation}</span>
+                            </div>
+                          </td>
+
+                          {/* Basic Pay & Scale */}
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <div className="space-y-0.5">
+                              <div className="font-mono font-bold text-stone-900 text-xs flex items-center gap-1">
+                                <span className="text-stone-500 font-sans font-normal">₹</span>
+                                <span>{(emp.basicPay || 37900).toLocaleString('en-IN')}</span>
+                                <span className="text-[10px] text-stone-400 font-sans font-normal">/mo</span>
+                              </div>
+                              {emp.payScale && (
+                                <div className="text-[10px] text-stone-500 font-mono">
+                                  {emp.payScale}
+                                </div>
+                              )}
+                              {emp.serviceHistory && emp.serviceHistory.length > 0 && (
+                                <div className="text-[10px] text-emerald-700 font-semibold flex items-center gap-0.5">
+                                  <TrendingUp className="w-2.5 h-2.5" />
+                                  <span>{emp.serviceHistory.length} orders recorded</span>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Leave Balances: EL & HPL (ಗಳಿಕೆ ರಜೆ ಮತ್ತು ಎಚ್ ಪಿ ಎಲ್) */}
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <div className="space-y-1">
+                              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-300 text-[11px] font-bold">
+                                <span className="font-kannada">ಗಳಿಕೆ (EL):</span>
+                                <span className="font-mono">{emp.earnedLeaveBalance ?? 30} ದಿನ</span>
+                              </div>
+                              <br />
+                              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-300 text-[11px] font-bold">
+                                <span className="font-kannada">HPL:</span>
+                                <span className="font-mono">{emp.halfPayLeaveBalance ?? 20} ದಿನ</span>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Contact */}
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-1 text-[11px] text-stone-700">
+                              <Mail className="w-3 h-3 text-stone-400 shrink-0" />
+                              <a href={`mailto:${emp.email}`} className="hover:text-amber-700 hover:underline truncate max-w-[170px]">
+                                {emp.email}
+                              </a>
+                            </div>
+                            <div className="flex items-center gap-1 text-[11px] text-stone-500 mt-0.5">
+                              <Phone className="w-3 h-3 text-stone-400 shrink-0" />
+                              <span>{emp.phone}</span>
+                            </div>
+                          </td>
+
+                          {/* Status */}
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            {getStatusBadge(emp.status)}
+                          </td>
+
+                          {/* Action buttons */}
+                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {onOpenServiceSanctions && (
+                                <button
+                                  id={`btn-sanction-emp-${emp.id}`}
+                                  onClick={() => onOpenServiceSanctions(emp)}
+                                  className="px-2 py-1 text-[11px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg transition-colors flex items-center gap-1 shadow-2xs"
+                                  title="ರಜೆ ಅಥವಾ ವೇತನ ಬಡ್ತಿ ಜ್ಞಾಪನಾ ಆದೇಶ ಸೃಜಿಸಿ (Leave & Increment Sanction Memo)"
+                                >
+                                  <Award className="w-3 h-3 text-amber-700" />
+                                  <span>ಆದೇಶ</span>
+                                </button>
+                              )}
+
+                              {onDraftLetterForEmployee && (
+                                <button
+                                  id={`btn-draft-letter-emp-${emp.id}`}
+                                  onClick={() => onDraftLetterForEmployee(emp)}
+                                  className="px-2 py-1 text-[11px] font-bold text-sky-900 bg-sky-100 hover:bg-sky-200 border border-sky-300 rounded-lg transition-colors flex items-center gap-1 shadow-2xs"
+                                  title="ಈ ನೌಕರರಿಗೆ ಸಾಮಾನ್ಯ ಪತ್ರ ತಯಾರಿಸಿ (Draft General Letter for Employee)"
+                                >
+                                  <FileText className="w-3 h-3 text-sky-700" />
+                                  <span>ಪತ್ರ</span>
+                                </button>
+                              )}
+
+                              <button
+                                id={`btn-view-emp-${emp.id}`}
+                                onClick={() => setSelectedEmployeeForDossier(emp)}
+                                className="p-1.5 text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors"
+                                title="View Employee Dossier & Assignments"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                id={`btn-edit-emp-${emp.id}`}
+                                onClick={() => onEditEmployee(emp)}
+                                className="p-1.5 text-amber-700 hover:text-amber-900 hover:bg-amber-100/60 rounded-lg transition-colors font-medium flex items-center gap-1"
+                                title="Edit / Update Employee Data"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span className="text-[11px] hidden sm:inline">Edit</span>
+                              </button>
+
+                              <button
+                                id={`btn-delete-emp-${emp.id}`}
+                                onClick={async () => {
+                                  if (window.confirm(`Are you sure you want to remove employee record "${emp.fullName}" (${emp.employeeCode})?`)) {
+                                    await onDeleteEmployee(emp.id);
+                                  }
+                                }}
+                                className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
+                                title="Archive / Remove Employee"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1284,14 +1730,35 @@ export const EmployeeRosterView: React.FC<EmployeeRosterViewProps> = ({
                     <span className="font-semibold text-stone-800">{selectedEmployeeForDossier.gender}</span>
                   </div>
                 )}
-                {(selectedEmployeeForDossier.dob || selectedEmployeeForDossier.age) && (
-                  <div className="bg-stone-50/70 p-2.5 rounded-lg border border-stone-200/80">
-                    <span className="text-stone-500 block">DOB & Age (ಜನ್ಮ ದಿನಾಂಕ)</span>
-                    <span className="font-semibold text-stone-800">
-                      {selectedEmployeeForDossier.dob || 'N/A'}{selectedEmployeeForDossier.age ? ` (${selectedEmployeeForDossier.age} Yrs)` : ''}
+                <div className="bg-sky-50/80 p-2.5 rounded-lg border border-sky-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sky-900 font-semibold block text-[10px] uppercase tracking-wider">
+                      DOB & Age (ಜನ್ಮ ದಿನಾಂಕ)
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const emp = selectedEmployeeForDossier;
+                        setSelectedEmployeeForDossier(null);
+                        onEditEmployee(emp);
+                      }}
+                      className="text-[10px] text-sky-800 hover:text-sky-950 font-bold font-kannada underline cursor-pointer"
+                      title="ಜನ್ಮ ದಿನಾಂಕ / ಸೇವಾ ದಿನಾಂಕ ತಿದ್ದುಪಡಿ ಮಾಡಿ"
+                    >
+                      ✏️ ತಿದ್ದುಪಡಿ
+                    </button>
                   </div>
-                )}
+                  <div className="font-semibold text-stone-900 font-mono mt-0.5">
+                    {selectedEmployeeForDossier.dob ? (
+                      <span>
+                        {selectedEmployeeForDossier.dob}
+                        {selectedEmployeeForDossier.age ? ` (${selectedEmployeeForDossier.age} ವರ್ಷ)` : ''}
+                      </span>
+                    ) : (
+                      <span className="text-stone-400 italic">ನಮೂದಿಸಿಲ್ಲ (Click Edit to set DOB)</span>
+                    )}
+                  </div>
+                </div>
                 {selectedEmployeeForDossier.ddoCode && (
                   <div className="bg-stone-50/70 p-2.5 rounded-lg border border-stone-200/80">
                     <span className="text-stone-500 block">DDO Code (ಡಿಡಿಒ ಕೋಡ್)</span>
@@ -1324,9 +1791,14 @@ export const EmployeeRosterView: React.FC<EmployeeRosterViewProps> = ({
                   <span className="text-stone-500 block">Contact Phone</span>
                   <span className="font-semibold text-stone-800">{selectedEmployeeForDossier.phone}</span>
                 </div>
-                <div className="bg-stone-50/70 p-2.5 rounded-lg border border-stone-200/80">
-                  <span className="text-stone-500 block">Date of Joining</span>
-                  <span className="font-semibold text-stone-800">{selectedEmployeeForDossier.joiningDate}</span>
+                <div className="bg-amber-50/70 p-2.5 rounded-lg border border-amber-200/90 sm:col-span-2">
+                  <span className="text-amber-800 font-semibold block text-[10px] uppercase tracking-wider">
+                    Date of Joining & Service (ಸೇವೆಗೆ ಸೇರಿದ ದಿನಾಂಕ)
+                  </span>
+                  <div className="flex items-center justify-between gap-2 mt-0.5">
+                    <span className="font-semibold text-stone-900 font-mono">{selectedEmployeeForDossier.joiningDate || 'N/A'}</span>
+                    <YearsOfServiceBadge joiningDate={selectedEmployeeForDossier.joiningDate} size="md" showKannada={true} />
+                  </div>
                 </div>
                 <div className="bg-stone-50/70 p-2.5 rounded-lg border border-stone-200/80">
                   <span className="text-stone-500 block">Last Updated</span>

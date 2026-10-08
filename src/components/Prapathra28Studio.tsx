@@ -15,15 +15,21 @@ import {
   Download,
   AlertCircle,
   ExternalLink,
-  Info
+  Info,
+  Calculator,
+  TrendingUp
 } from 'lucide-react';
 import { Employee, AdminAuthUser } from '../types';
 import {
   Prapathra28EmployeeRow,
   preparePrapathra28Data,
   exportPrapathra28ToExcel,
-  toKannadaDigits
+  toKannadaDigits,
+  prepareSalaryGrantDemandData,
+  exportGrantDemandToExcel,
+  SalaryGrantDemandRow
 } from '../utils/prapathra28Utils';
+import { formatCurrency } from '../utils/formatters';
 
 interface Prapathra28StudioProps {
   employees: Employee[];
@@ -44,7 +50,7 @@ export const Prapathra28Studio: React.FC<Prapathra28StudioProps> = ({
 }) => {
   const [selectedMonth, setSelectedMonth] = useState<'January' | 'July'>(initialMonth || 'January');
   const [selectedYear, setSelectedYear] = useState<number>(2026);
-  const [activeSubTab, setActiveSubTab] = useState<'form28' | 'officeOrder' | 'employeeSelect'>('form28');
+  const [activeSubTab, setActiveSubTab] = useState<'form28' | 'officeOrder' | 'employeeSelect' | 'budgetDemand'>('form28');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDueOnly, setFilterDueOnly] = useState(true);
   const [customOrderNo, setCustomOrderNo] = useState('');
@@ -53,6 +59,12 @@ export const Prapathra28Studio: React.FC<Prapathra28StudioProps> = ({
   );
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+
+  // Budget Demand State (ಅನುದಾನ ಮುಂದಿನ ವರ್ಷ ಬೇಡಿಕೆ - ೧೨ ತಿಂಗಳ ಲೆಕ್ಕಾಚಾರ)
+  const [budgetFinancialYear, setBudgetFinancialYear] = useState<string>('2026-2027');
+  const [budgetDaPercent, setBudgetDaPercent] = useState<number>(50);
+  const [budgetHraPercent, setBudgetHraPercent] = useState<number>(8);
+  const [budgetSearch, setBudgetSearch] = useState<string>('');
 
   // Dynamic DDO Signatory pulled from employee isDdo flag
   const ddoOfficer = useMemo(() => {

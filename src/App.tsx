@@ -76,6 +76,51 @@ const MODULE_TITLES_KANNADA: Record<string, string> = {
   pdfMerger: '೨೨. PDF ವಿಲೀನ (PDF Merger & Document Consolidation)',
 };
 
+// Utility to strictly deduplicate employee lists by ID, KGID, and Employee Code
+export function deduplicateEmployees(list: Employee[]): Employee[] {
+  if (!Array.isArray(list)) return [];
+  const byId = new Map<string, Employee>();
+  const byKgid = new Map<string, string>(); // kgid -> id
+  const byCode = new Map<string, string>(); // code -> id
+
+  const result: Employee[] = [];
+
+  for (const emp of list) {
+    if (!emp) continue;
+    const empId = emp.id || (emp.kgidNumber ? `emp-${emp.kgidNumber}` : `emp-${Math.random().toString(36).substring(2, 9)}`);
+    const cleanKgid = emp.kgidNumber ? String(emp.kgidNumber).trim() : '';
+    const cleanCode = emp.employeeCode ? String(emp.employeeCode).trim() : '';
+
+    // Check if employee already exists by ID, KGID, or Code
+    const existingId = (byId.has(empId) ? empId : null) || 
+      (cleanKgid && byKgid.has(cleanKgid) ? byKgid.get(cleanKgid) : null) || 
+      (cleanCode && byCode.has(cleanCode) ? byCode.get(cleanCode) : null);
+
+    if (existingId && byId.has(existingId)) {
+      // Merge updates into the existing record
+      const existing = byId.get(existingId)!;
+      const merged: Employee = { 
+        ...existing, 
+        ...emp, 
+        id: existingId,
+        kgidNumber: cleanKgid || existing.kgidNumber,
+        employeeCode: cleanCode || existing.employeeCode
+      };
+      byId.set(existingId, merged);
+      const idx = result.findIndex(r => r.id === existingId);
+      if (idx !== -1) result[idx] = merged;
+    } else {
+      const normalizedEmp: Employee = { ...emp, id: empId };
+      byId.set(empId, normalizedEmp);
+      if (cleanKgid) byKgid.set(cleanKgid, empId);
+      if (cleanCode) byCode.set(cleanCode, empId);
+      result.push(normalizedEmp);
+    }
+  }
+
+  return result;
+}
+
 export default function App() {
   // Authentication State: 5 registered authorized users & Google/password auth
   const [currentUser, setCurrentUser] = useState<AdminAuthUser | null>(() => {
@@ -190,51 +235,6 @@ export default function App() {
       console.error('Failed to fetch dak summary:', err);
     }
   }, []);
-
-// Utility to strictly deduplicate employee lists by ID, KGID, and Employee Code
-export function deduplicateEmployees(list: Employee[]): Employee[] {
-  if (!Array.isArray(list)) return [];
-  const byId = new Map<string, Employee>();
-  const byKgid = new Map<string, string>(); // kgid -> id
-  const byCode = new Map<string, string>(); // code -> id
-
-  const result: Employee[] = [];
-
-  for (const emp of list) {
-    if (!emp) continue;
-    const empId = emp.id || (emp.kgidNumber ? `emp-${emp.kgidNumber}` : `emp-${Math.random().toString(36).substring(2, 9)}`);
-    const cleanKgid = emp.kgidNumber ? String(emp.kgidNumber).trim() : '';
-    const cleanCode = emp.employeeCode ? String(emp.employeeCode).trim() : '';
-
-    // Check if employee already exists by ID, KGID, or Code
-    const existingId = (byId.has(empId) ? empId : null) || 
-      (cleanKgid && byKgid.has(cleanKgid) ? byKgid.get(cleanKgid) : null) || 
-      (cleanCode && byCode.has(cleanCode) ? byCode.get(cleanCode) : null);
-
-    if (existingId && byId.has(existingId)) {
-      // Merge updates into the existing record
-      const existing = byId.get(existingId)!;
-      const merged: Employee = { 
-        ...existing, 
-        ...emp, 
-        id: existingId,
-        kgidNumber: cleanKgid || existing.kgidNumber,
-        employeeCode: cleanCode || existing.employeeCode
-      };
-      byId.set(existingId, merged);
-      const idx = result.findIndex(r => r.id === existingId);
-      if (idx !== -1) result[idx] = merged;
-    } else {
-      const normalizedEmp: Employee = { ...emp, id: empId };
-      byId.set(empId, normalizedEmp);
-      if (cleanKgid) byKgid.set(cleanKgid, empId);
-      if (cleanCode) byCode.set(cleanCode, empId);
-      result.push(normalizedEmp);
-    }
-  }
-
-  return result;
-}
 
   // Fetch departmental employees establishment with durable multi-layer persistence
   const fetchEmployees = useCallback(async () => {
